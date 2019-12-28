@@ -3,7 +3,7 @@
  * Name			: Ori Lazar
  * Date			: 28/12/2019
  * Description	: Entry point for this engine.
-	 .---.
+     .---.
    .'_:___".
    |__ --==|
    [  ]  :[|
@@ -13,3 +13,11 @@
  /___\ /___\
 ***************************************************************************/
 #pragma once 
+
+namespace Vulkan_Engine
+{
+	namespace Renderer
+	{
+
+	}
+}

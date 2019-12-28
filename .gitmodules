@@ -7,3 +7,7 @@
 	path = Vulkan-Engine/Renderer/Dependencies/GLM
 	url = https://github.com/g-truc/glm
 	branch = master
+[submodule "Vulkan-Engine/Renderer/Dependencies/SPDLOG"]
+	path = Vulkan-Engine/Renderer/Dependencies/SPDLOG
+	url = https://github.com/gabime/spdlog
+	branch = master

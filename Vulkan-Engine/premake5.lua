@@ -53,10 +53,11 @@ project "Renderer"
 	includedirs
 	{
 		"%{prj.name}/src",
-		"Resources/",
+		"%{prj.name}/Dependencies/spdlog/include",
 		"%{IncludeDir.GLFW}",
 		"%{IncludeDir.glm}",
-		"C:/VulkanSDK/1.1.130.0/Include"
+		"C:/VulkanSDK/1.1.130.0/Include",
+		"Resources/"
 	}
 
 	libdirs 
