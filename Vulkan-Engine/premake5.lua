@@ -31,8 +31,8 @@ project "Renderer"
 	cppdialect "C++17"
 	staticruntime "on"
 	
-	targetdir ("bin/" .. outputdir .. "/%{prj.name}")
-	objdir ("bin-int/" .. outputdir .. "/%{prj.name}")
+	targetdir ("Bin/Output/" .. outputdir .. "/%{prj.name}")
+	objdir ("Bin/Intermediates/" .. outputdir .. "/%{prj.name}")
 
 	pchheader "vkepch.h"
 	pchsource "Renderer/src/vkepch.cpp"
