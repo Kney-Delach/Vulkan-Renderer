@@ -16,6 +16,7 @@
 
 #include "Core.h"
 #include "Window/Window.h"
+#include "Timers/Timestep.h"
 
 namespace Vulkan_Engine
 {
@@ -40,6 +41,7 @@ namespace Vulkan_Engine
 			VKE_RESULT Cleanup();
 		private:
 			bool m_Running;
+			Timestep m_LastFrameTime; 
 			Ref<Window> m_Window;
 		};
 	}

@@ -1,6 +1,21 @@
+/***************************************************************************
+ * Filename		: Window.cpp
+ * Name			: Ori Lazar
+ * Date			: 28/12/2019
+ * Description	: Windowing abstraction for this engine.
+     .---.
+   .'_:___".
+   |__ --==|
+   [  ]  :[|
+   |__| I=[|
+   / / ____|
+  |-/.____.'
+ /___\ /___\
+***************************************************************************/
 #include "vkepch.h"
 #include "Window.h"
 #include "Core/Logger/Log.h"
+#include "Core/Timers/Timestep.h"
 
 #define GLFW_INCLUDE_VULKAN // includes the vulkan header 
 #include <GLFW/glfw3.h>
@@ -18,11 +33,11 @@ namespace Vulkan_Engine
 		{
 		}
 
-		bool Window::OnUpdate()
+		bool Window::OnUpdate(Timestep deltaTime)
 		{
 			if(!glfwWindowShouldClose(m_Window))
 			{
-				glfwPollEvents();
+=				glfwPollEvents();
 				return true;
 			}
 			return false;
@@ -32,7 +47,8 @@ namespace Vulkan_Engine
 		{
 			VK_CORE_DEBUG("Initializing GLFW Window & Setting Hints");
 
-			glfwInit(); 
+			glfwInit();
+			glfwSwapInterval(1);
 			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // no opengl context
 			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // because resizing is more complex
 

@@ -19,6 +19,8 @@
 
 #include "vulkan/vulkan.h"
 
+#include "GLFW/glfw3.h"
+
 namespace Vulkan_Engine
 {
 	namespace Renderer
@@ -70,7 +72,12 @@ namespace Vulkan_Engine
 			VK_CORE_DEBUG("Running main loop");
 			while(m_Running) //todo: Make this a callback
 			{
-				m_Running = m_Window->OnUpdate();
+				//calculate time difference between frames
+				const float time = static_cast<float>(glfwGetTime()); //TODO: abstract glfwGetTime
+				Timestep deltaTime = time - m_LastFrameTime;
+				m_LastFrameTime = time;
+				
+				m_Running = m_Window->OnUpdate(deltaTime);
 			}
 			
 			return VKE_RESULT::VKE_SUCCESS;
