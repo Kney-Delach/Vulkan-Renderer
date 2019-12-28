@@ -15,6 +15,7 @@
 #pragma once
 
 #include "Core.h"
+#include "Window/Window.h"
 
 namespace Vulkan_Engine
 {
@@ -22,6 +23,8 @@ namespace Vulkan_Engine
 	{
 		enum class VKE_RESULT { VKE_SUCCESS = 1, VKE_FAILURE = 2 };
 
+		class Window;
+		
 		class Application
 		{
 		public:
@@ -31,11 +34,13 @@ namespace Vulkan_Engine
 			VKE_RESULT Run();
 		private:
 			VKE_RESULT InitEngineUtils();
+			VKE_RESULT InitWindow(); 
 			VKE_RESULT InitVulkan();
-			VKE_RESULT MainLoop();
+			VKE_RESULT UpdateLoop();
 			VKE_RESULT Cleanup();
 		private:
 			bool m_Running;
+			Ref<Window> m_Window;
 		};
 	}
 }

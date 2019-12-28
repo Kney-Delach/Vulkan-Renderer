@@ -17,6 +17,8 @@
 #include "Application.h"
 #include "Logger/Log.h"
 
+#include "vulkan/vulkan.h"
+
 namespace Vulkan_Engine
 {
 	namespace Renderer
@@ -32,8 +34,9 @@ namespace Vulkan_Engine
 		VKE_RESULT Application::Run()
 		{
 			InitEngineUtils();
+			InitWindow();
 			InitVulkan();
-			MainLoop();
+			UpdateLoop();
 			Cleanup();
 			return VKE_RESULT::VKE_SUCCESS;
 		}
@@ -46,6 +49,15 @@ namespace Vulkan_Engine
 			return VKE_RESULT::VKE_SUCCESS;
 		}
 
+		VKE_RESULT Application::InitWindow()
+		{
+			VK_CORE_DEBUG("Initializing Application Window");
+
+			m_Window = CreateRef<Window>();
+
+			return VKE_RESULT::VKE_SUCCESS;
+		}
+
 		VKE_RESULT Application::InitVulkan()
 		{
 			VK_CORE_DEBUG("Initializing Vulkan");
@@ -53,17 +65,22 @@ namespace Vulkan_Engine
 			return VKE_RESULT::VKE_SUCCESS;
 		}
 
-		VKE_RESULT Application::MainLoop()
+		VKE_RESULT Application::UpdateLoop()
 		{
 			VK_CORE_DEBUG("Running main loop");
-
+			while(m_Running) //todo: Make this a callback
+			{
+				m_Running = m_Window->OnUpdate();
+			}
+			
 			return VKE_RESULT::VKE_SUCCESS;
 		}
 
 		VKE_RESULT Application::Cleanup()
 		{
 			VK_CORE_DEBUG("Cleaning up engine data");
-
+			m_Window->CleanupBegin();
+			m_Window->CleanupEnd(); 
 			return VKE_RESULT::VKE_SUCCESS;
 		}
 	}

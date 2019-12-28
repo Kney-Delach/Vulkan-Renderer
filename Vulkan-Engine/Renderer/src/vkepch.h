@@ -14,6 +14,7 @@
 ***************************************************************************/
 #pragma once
 
+// C++ libraries 
 #include <iostream>
 #include <memory>
 #include <utility>
@@ -27,6 +28,10 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <stdexcept>
+
+// C libraries
+#include <cstdlib>
 
 //#ifdef VKE_PLATFORM_WINDOWS
 //#include <Windows.h>
