@@ -66,25 +66,34 @@ namespace Vulkan_Engine
 			void SetVSync(const bool enabled);
 		private:
 			void InitWindow();
+			// glfw 
 			void InitGLFW(std::vector<const char*>& extensions);
+			void SetGLFWCallbacks();
+			void SetGLFWConfigurations();
+			// vulkan 
 			void VerifyVulkanExtensionsAvailable(std::vector<const char*>& extensions) const;
 			void InitVulkan();
 			void CreateVulkanInstance();
+			void CreateVulkanWindowSurface(); 
 			void CreateVulkanDebugMessenger();
 			std::vector<const char*> GetAllRequiredExtensions() const;
 			void InitVulkanPhysicalDevice();
-			void InitVulkanLogicalDevice(); 
-			void SetGLFWCallbacks();
-			void SetGLFWConfigurations();
+			void InitVulkanLogicalDevice();
+
 		private:
-			//todo: abstract the window, and vk instances / device into a structure of rendering context 
+			//todo: abstract the window, and vk instances / device into a structure of rendering context
+			// glfw and mindow variables 
 			GLFWwindow* m_Window = nullptr;
+			WindowData m_WindowData;
+			// vulkan stuff
 			VkInstance m_VkInstance;
 			VkDebugUtilsMessengerEXT m_DebugCallbackMessenger;
 			VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 			VkDevice m_LogicalDevice;
-			VkQueue m_GraphicsQueueHandle; // used to retrieve queue handles 
-			WindowData m_WindowData;
+			VkQueue m_GraphicsQueueHandle; // used to retrieve queue handles
+			// ---------- windowing branch ----------  //
+			VkSurfaceKHR m_WindowSurface;// window surface (create directly after instance creation as can affect physical device)
+			
 		};
 	}
 }

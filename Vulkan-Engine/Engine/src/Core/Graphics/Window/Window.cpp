@@ -43,7 +43,8 @@ namespace Vulkan_Engine
 			if (s_EnableValidationLayers) 
 			{
 				DestroyDebugUtilsMessengerEXT(m_VkInstance, m_DebugCallbackMessenger, nullptr); // clean layers debugger
-			}			
+			}
+			vkDestroySurfaceKHR(m_VkInstance, m_WindowSurface, nullptr); // destroy the window surface (before the instance) 
 			vkDestroyInstance(m_VkInstance, nullptr); // clean active vulkan instance 
 			glfwDestroyWindow(m_Window); // clean glfw window 
 			glfwTerminate(); // terminate window 
@@ -120,6 +121,7 @@ namespace Vulkan_Engine
 			VK_CORE_DEBUG("[Graphics System]: Initializing Vulkan");
 			CreateVulkanInstance();
 			CreateVulkanDebugMessenger();
+			CreateVulkanWindowSurface();
 			InitVulkanPhysicalDevice();
 			InitVulkanLogicalDevice();
 		}
@@ -175,6 +177,28 @@ namespace Vulkan_Engine
 			// Creates the vulkan instance 
 			const VkResult result = vkCreateInstance(&createInfo, nullptr, &m_VkInstance);
 			VK_CORE_ASSERT(result == VK_SUCCESS, result);
+		}
+
+		void Window::CreateVulkanWindowSurface()
+		{
+			//////////////////////////////////////////////////////////////////
+			///todo: This is an example of how the extension would be implemented without glfw (win32 specific)
+			//VkWin32SurfaceCreateInfoKHR createInfo = {};
+			//createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+			//createInfo.hwnd = glfwGetWin32Window(window);
+			//createInfo.hinstance = GetModuleHandle(nullptr);
+			//if (vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, &surface) != VK_SUCCESS) {
+			//throw std::runtime_error("failed to create window surface!");
+			//}
+			//////////////////////////////////////////////////////////////////
+
+			// the glfw version of assigning a window surface (m_WindowSurface)
+			if (glfwCreateWindowSurface(m_VkInstance, m_Window, nullptr, &m_WindowSurface) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateVulkanWindowSurface]:Failed to create window surface!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
 		}
 
 		// ------------------------------ Vulkan Debug Settup ------------------------------
