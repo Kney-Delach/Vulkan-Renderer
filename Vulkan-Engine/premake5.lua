@@ -5,7 +5,7 @@
 
 workspace "Vulkan-Engine"
 	architecture "x64"
-	startproject "Renderer"
+	startproject "Engine"
 
 	configurations
 	{
@@ -16,16 +16,16 @@ workspace "Vulkan-Engine"
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
 IncludeDir = {}
-IncludeDir["GLFW"] = "Renderer/Dependencies/GLFW/include"
-IncludeDir["glm"] = "Renderer/Dependencies/glm"
+IncludeDir["GLFW"] = "Engine/Dependencies/GLFW/include"
+IncludeDir["glm"] = "Engine/Dependencies/glm"
 
 group "Dependencies"
-	include "Renderer/Dependencies/GLFW"
+	include "Engine/Dependencies/GLFW"
 group ""
 
 -- Exalted graphics engine
-project "Renderer"
-	location "Renderer"
+project "Engine"
+	location "Engine"
 	kind "ConsoleApp"
 	language "C++"
 	cppdialect "C++17"
@@ -35,7 +35,7 @@ project "Renderer"
 	objdir ("Bin/Intermediates/" .. outputdir .. "/%{prj.name}")
 
 	pchheader "vkepch.h"
-	pchsource "Renderer/src/vkepch.cpp"
+	pchsource "Engine/src/vkepch.cpp"
 
 	files
 	{
@@ -53,10 +53,11 @@ project "Renderer"
 	includedirs
 	{
 		"%{prj.name}/src",
-		"Resources/",
+		"%{prj.name}/Dependencies/spdlog/include",
 		"%{IncludeDir.GLFW}",
 		"%{IncludeDir.glm}",
-		"C:/VulkanSDK/1.1.130.0/Include"
+		"C:/VulkanSDK/1.1.130.0/Include",
+		"Resources/"
 	}
 
 	libdirs 
