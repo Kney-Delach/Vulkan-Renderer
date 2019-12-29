@@ -45,6 +45,13 @@ namespace Vulkan_Engine
 				Height = copy.Height;
 			}
 		};
+
+		struct WindowData
+		{
+			WindowProperties Properties;
+			bool VSync;
+			EventCallbackFunction EventCallback;
+		};
 		
 		class Window
 		{
@@ -63,18 +70,20 @@ namespace Vulkan_Engine
 			void VerifyVulkanExtensionsAvailable(std::vector<const char*>& extensions) const;
 			void InitVulkan();
 			void CreateVulkanInstance();
+			void CreateVulkanDebugMessenger();
+			std::vector<const char*> GetAllRequiredExtensions() const;
+			void InitVulkanPhysicalDevice();
+			void InitVulkanLogicalDevice(); 
 			void SetGLFWCallbacks();
 			void SetGLFWConfigurations();
 		private:
-			//todo: abstract the window, and vk instances into a structure of rendering context 
+			//todo: abstract the window, and vk instances / device into a structure of rendering context 
 			GLFWwindow* m_Window = nullptr;
 			VkInstance m_VkInstance;
-			struct WindowData
-			{
-				WindowProperties Properties;
-				bool VSync;
-				EventCallbackFunction EventCallback;
-			};
+			VkDebugUtilsMessengerEXT m_DebugCallbackMessenger;
+			VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
+			VkDevice m_LogicalDevice;
+			VkQueue m_GraphicsQueueHandle; // used to retrieve queue handles 
 			WindowData m_WindowData;
 		};
 	}
