@@ -59,11 +59,14 @@ namespace Vulkan_Engine
 			void SetVSync(const bool enabled);
 		private:
 			void InitWindow();
+			void InitGLFW(std::vector<const char*>& extensions);
+			void VerifyVulkanExtensionsAvailable(std::vector<const char*>& extensions) const;
 			void InitVulkan();
 			void CreateVulkanInstance();
 			void SetGLFWCallbacks();
 			void SetGLFWConfigurations();
 		private:
+			//todo: abstract the window, and vk instances into a structure of rendering context 
 			GLFWwindow* m_Window = nullptr;
 			VkInstance m_VkInstance;
 			struct WindowData

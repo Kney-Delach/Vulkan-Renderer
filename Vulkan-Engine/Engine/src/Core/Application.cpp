@@ -57,7 +57,6 @@ namespace Vulkan_Engine
 		VK_CORE_DEBUG("[Application]: Initializing Graphics System");
 		m_GraphicsSystem = CreateRef<Graphics::GraphicsSystem>();
 		m_GraphicsSystem->SetWindowEventCallback(VKE_BIND_EVENT_FN(Application::OnEvent));
-
 		return VKE_RESULT::VKE_SUCCESS;
 	}
 
@@ -71,8 +70,7 @@ namespace Vulkan_Engine
 			const Timestep deltaTime = time - m_LastFrameTime;
 			m_LastFrameTime = time;
 			m_GraphicsSystem->OnUpdate(deltaTime);
-		}
-		
+		}		
 		return VKE_RESULT::VKE_SUCCESS;
 	}
 

@@ -17,6 +17,7 @@
 #include "Core/Logger/Log.h"
 #include "Core/Timers/Timestep.h"
 #include "Core/Events/ApplicationEvent.h"
+#include "Core/Graphics/Utility/VulkanUtility.h"
 
 namespace Vulkan_Engine
 {
@@ -25,8 +26,6 @@ namespace Vulkan_Engine
 		Window::Window()
 		{
 			InitWindow();
-			InitVulkan();
-			CreateVulkanInstance();
 		}
 
 		Window::~Window()
@@ -40,6 +39,8 @@ namespace Vulkan_Engine
 
 		void Window::Cleanup()
 		{
+			vkDestroyInstance(m_VkInstance, nullptr);
+
 			glfwDestroyWindow(m_Window);
 			glfwTerminate();
 		}
@@ -62,15 +63,51 @@ namespace Vulkan_Engine
 		{
 			VK_CORE_DEBUG("[Graphics System]: Initializing GLFW");
 			m_WindowData.Properties = WindowProperties();
-			glfwInit();			
+
+			std::vector<const char*> requiredExtensions; // used to get glfw's extension requirements
+			InitGLFW(requiredExtensions);
+			VerifyVulkanExtensionsAvailable(requiredExtensions);
+			InitVulkan(); // if the extensions are available, then go ahead and initialize the vulkan context
+		}
+		
+		void Window::InitGLFW(std::vector<const char*>& extensions)
+		{
+			glfwInit();
 			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // no opengl context
 			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // because resizing is more complex			
 			m_Window = glfwCreateWindow(m_WindowData.Properties.Width, m_WindowData.Properties.Height, m_WindowData.Properties.Title.c_str(), nullptr, nullptr);
+			VK_ASSERT(m_Window != nullptr, "GLFW Window Initialization failed!")
 			glfwSetWindowUserPointer(m_Window, &m_WindowData);
+			glfwSetInputMode(m_Window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+			// add glfw extensions to required extensions vector
+			uint32_t glfwExtensionCount = 0;
+			const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+			VK_ASSERT(glfwExtensions != NULL, "GLFW Extension list returned empty, something somewhere went terrible wrong!")
+			for(uint32_t i = 0; i < glfwExtensionCount; ++i)
+			{
+				extensions.push_back(glfwExtensions[i]);
+			}
 			SetGLFWConfigurations();
 			SetGLFWCallbacks();
 		}
 
+		void Window::VerifyVulkanExtensionsAvailable(std::vector<const char*>& extensions) const
+		{
+			auto availableExtensions = GetVulkanData<VkExtensionProperties>(vkEnumerateInstanceExtensionProperties, "");
+			std::vector<const char*> availableExtNames;
+			std::transform(availableExtensions.begin(), availableExtensions.end(), std::back_inserter(availableExtNames),
+				[](const VkExtensionProperties& prop)
+			{
+				VK_CORE_TRACE("[Graphics System::Window::InitWindow::Vulkan_Extension_AVAILABLE]:: {0}", prop.extensionName);
+				return prop.extensionName;
+			});
+			for (auto extension : extensions) //TODO: Add more extension error handling mechanisms for runtime....
+			{ 
+				VK_ASSERT(std::find(std::begin(availableExtNames), std::end(availableExtNames), extension) == availableExtNames.end(), "System is missing GLFW required Vulkan extensions!");
+			}
+		}
+
+		//TODO: Abstract vulkan to rendering context? 
 		void Window::InitVulkan()
 		{
 			VK_CORE_DEBUG("[Graphics System]: Initializing Vulkan");
@@ -94,11 +131,11 @@ namespace Vulkan_Engine
 			VkInstanceCreateInfo createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 			createInfo.pApplicationInfo = &appInfo;
+
 			// extensions 
 			uint32_t glfwExtensionCount = 0;
 			const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-			VK_CORE_TRACE("[Graphics System]: GLFW Extensions");
+			VK_CORE_TRACE("[Graphics System::Window::CreateVulkanInstance]: GLFW Extensions List");
 			for (uint32_t i = 0; i < glfwExtensionCount; i++)
 			{
 				VK_CORE_TRACE("-> {0}", *(glfwExtensions + i));
@@ -109,8 +146,7 @@ namespace Vulkan_Engine
 			createInfo.enabledLayerCount = 0;
 			// Creates the vulkan instance 
 			const VkResult result = vkCreateInstance(&createInfo, nullptr, &m_VkInstance);
-			VK_CORE_ASSERT(result == VK_SUCCESS, result); //TODO: Create a translator function between VkResult and VK_LOGGER
-
+			VK_CORE_ASSERT(result == VK_SUCCESS, result);
 		}
 
 		void Window::SetGLFWCallbacks()
@@ -128,25 +164,5 @@ namespace Vulkan_Engine
 		{
 			SetVSync(true);
 		}
-
-		//void Window::GetAvailableExtensionDetails()
-//{
-//	uint32_t extensionCount = 0;
-//	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-//	std::vector<VkExtensionProperties> vulkanExtensions = std::vector<VkExtensionProperties>(extensionCount);
-
-//	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, vulkanExtensions.data());
-//	m_ExtensionNames = std::vector<char*>(extensionCount);
-//	int i = 0;
-//	for (VkExtensionProperties vkp : vulkanExtensions)
-//	{
-//		m_ExtensionNames[i] = (vkp.extensionName);
-//		i++;
-//	}
-//	VK_CORE_INFO("Available Vulkan Extensions");
-//	for (const auto& extension : vulkanExtensions) {
-//		VK_CORE_INFO("-> {0}",extension.extensionName);
-//	}
-//}
 	}
 }
