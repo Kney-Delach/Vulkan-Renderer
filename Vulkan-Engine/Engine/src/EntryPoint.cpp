@@ -16,11 +16,10 @@
 
 #include "Core/Application.h"
 
-using namespace Vulkan_Engine;
 
 int main()
 {
-	Renderer::Application app;
+	Vulkan_Engine::Application app;
 	try
 	{
 		app.Run();

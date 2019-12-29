@@ -15,7 +15,7 @@
 #pragma once
 #include <memory>
 
-/** Debug macro implementation. */
+// Debug macro implementation.
 #ifdef VKE_DEBUG
 #define VKE_ENABLE_ASSERTS
 #endif
@@ -28,10 +28,13 @@
 #define VK_CORE_ASSERT(x, ...)
 #endif
 
-/** bitwise bitfield macro, used for applying multiple categories to a single event type. */
+// Bitwise bitfield macro, used for applying multiple categories to a single event type.
 #define BIT(x) (1 << x)
 
-/** Scope and Reference definitions. */
+// Event binding macro with single placeholder. 
+#define VKE_BIND_EVENT_FN(fn) std::bind(&fn, this, std::placeholders::_1)
+
+// Scope and Reference definitions.
 namespace Vulkan_Engine
 {
 	// unique pointers

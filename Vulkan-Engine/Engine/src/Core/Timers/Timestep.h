@@ -16,18 +16,15 @@
 
 namespace Vulkan_Engine
 {
-	namespace Renderer
+	class Timestep
 	{
-		class Timestep
-		{
-		public:
-			Timestep(float time = 0.0f) : m_Time(time) {}
-			~Timestep() = default;
-			inline operator float() const { return m_Time; }
-			inline float GetSeconds() const { return m_Time; }
-			inline float GetMilliseconds() const { return m_Time * 1000.f; }
-		private:
-			float m_Time; 
-		};
-	}
+	public:
+		Timestep(float time = 0.0f) : m_Time(time) {}
+		~Timestep() = default;
+		inline operator float() const { return m_Time; }
+		inline float GetSeconds() const { return m_Time; }
+		inline float GetMilliseconds() const { return m_Time * 1000.f; }
+	private:
+		float m_Time; 
+	};	
 }
