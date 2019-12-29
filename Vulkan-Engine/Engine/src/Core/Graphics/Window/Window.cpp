@@ -116,6 +116,12 @@ namespace Vulkan_Engine
 
 		void Window::CreateVulkanInstance()
 		{
+			if(s_EnableValidationLayers && !AreValidationLayersAvailable())
+			{
+				VK_CORE_CRITICAL("[Graphics System]: Validation layers requested, but not available!");
+				throw std::runtime_error("VALIDATION LAYERS: requested, but not available!");				
+			}
+
 			// optional
 			VkApplicationInfo appInfo = {};
 			appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO; // type of the info 
