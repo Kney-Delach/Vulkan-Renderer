@@ -3,6 +3,7 @@
 #include <optional>
 #include <vector>
 #include <cstring>
+#include <cstdint> // uint32_max 
 
 #include <vulkan/vulkan.h>
 
@@ -32,7 +33,9 @@ namespace Vulkan_Engine
 		}
 
 		//TODO: move this from here into a validation abstraction
-		const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+		const std::vector<const char*> s_ValidationLayers = { "VK_LAYER_KHRONOS_validation" };
+		const std::vector<const char*> s_DeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
 #ifdef VKE_DEBUG
 		const bool s_EnableValidationLayers = true;
 #else
@@ -48,7 +51,7 @@ namespace Vulkan_Engine
 		{
 			// get the available validation layers
 			auto availableLayers = GetVulkanData<VkLayerProperties>(vkEnumerateInstanceLayerProperties);
-			for (const char* layerName : validationLayers) 
+			for (const char* layerName : s_ValidationLayers)
 			{
 				bool layerFound = false;
 				for (const auto& layerProperties : availableLayers) 
@@ -101,90 +104,153 @@ namespace Vulkan_Engine
 
 		//TODO: Template this to handle any suitability 
 		//////////////////////////////////////////////////////////////////////
-		///
+		// it's actually possible that the queue families supporting drawing commands
+		// and the ones supporting presentation do not overlap.
+		// Therefore we have to take into account that there could be a distinct presentation queue by modifying the QueueFamilyIndices structure:
 		struct QueueFamilyIndices
 		{
-			std::optional<uint32_t> GraphicsFamily;
-			bool IsComplete() const { return GraphicsFamily.has_value(); }
+			std::optional<uint32_t> GraphicsFamily; 
+			std::optional<uint32_t> PresentFamily;   // used to ensure that a device can present images ot the surface created (queue specific feature)
+			_NODISCARD bool IsComplete() const { return GraphicsFamily.has_value() && PresentFamily.has_value(); }
 		};
-		
-		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
+
+		// 1: Verify that queue family has capability of presenting to chosen window surface
+		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR& surface)
 		{
 			QueueFamilyIndices indices;
 			// Assign index to queue families that could be found
 			auto queueFamilies = GetVulkanData<VkQueueFamilyProperties>(vkGetPhysicalDeviceQueueFamilyProperties, device);
 
 			int i = 0;
-			for (const auto& queueFamily : queueFamilies) 
-			{
+			for (const auto& queueFamily : queueFamilies) {
 				if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) 
 				{
 					indices.GraphicsFamily = i;
 				}
-
+				VkBool32 presentSupport = false;
+				vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport); // checks if the queue supports the surface
+				if (presentSupport) 
+				{
+					indices.PresentFamily = i;
+				}
 				if (indices.IsComplete()) 
 				{
 					break;
 				}
 				i++;
 			}
+
 			return indices;
 		}
 
-		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device)
+		// used in swap chain verifications
+		bool CheckDeviceExtensionSupport(VkPhysicalDevice device)
 		{
-			//VkPhysicalDeviceProperties deviceProperties;
-			//vkGetPhysicalDeviceProperties(device, &deviceProperties);
-			//VkPhysicalDeviceFeatures deviceFeatures; // use this to query additional feature support (64b-float, compressions, viewports)
-			//vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-			//return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
-
-			const QueueFamilyIndices indices = FindQueueFamilies(device);
-			return indices.IsComplete();
+			const auto availableExtensions = GetVulkanData<VkExtensionProperties>(vkEnumerateDeviceExtensionProperties, device, nullptr);
+			std::set<std::string> requiredExtensions(s_DeviceExtensions.begin(), s_DeviceExtensions.end());
+			for (const auto& extension : availableExtensions) 
+			{
+				requiredExtensions.erase(extension.extensionName);
+			}
+			return requiredExtensions.empty();
 		}
 
-		//////////////////////////////////////////////////////////////////////
-		//TODO: Implement something like below, for choosing optimal card
-		//void pickPhysicalDevice() {
-		//	...
+		// swap chain setup
+		
+		struct SwapChainSupportDetails
+		{
+			VkSurfaceCapabilitiesKHR Capabilities; // min/max number of images in sc, min/max width / height of images 
+			std::vector<VkSurfaceFormatKHR> Formats; // pixel format, color space .... 
+			std::vector<VkPresentModeKHR> PresentModes; // available presentation modes
+		};
 
-		//		// Use an ordered map to automatically sort candidates by increasing score
-		//		std::multimap<int, VkPhysicalDevice> candidates;
+		// populates a swap chain for some physical device  (physical | logical devices are the core components of the swap chain) 
+		SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR& surface)
+		{
+			SwapChainSupportDetails details;
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.Capabilities); //  supported capabilities
+			details.Formats = GetVulkanData<VkSurfaceFormatKHR>(vkGetPhysicalDeviceSurfaceFormatsKHR,device,surface); // supported surface formats 
+			details.PresentModes = GetVulkanData<VkPresentModeKHR>(vkGetPhysicalDeviceSurfacePresentModesKHR, device, surface);
+			return details;
+		}
 
-		//	for (const auto& device : devices) {
-		//		int score = rateDeviceSuitability(device);
-		//		candidates.insert(std::make_pair(score, device));
-		//	}
+		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device, VkSurfaceKHR& surface)
+		{
+			const QueueFamilyIndices indices = FindQueueFamilies(device, surface);
+			const bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
-		//	// Check if the best candidate is suitable at all
-		//	if (candidates.rbegin()->first > 0) {
-		//		physicalDevice = candidates.rbegin()->second;
-		//	}
-		//	else {
-		//		throw std::runtime_error("failed to find a suitable GPU!");
-		//	}
-		//}
+			bool swapChainAdequate = false;
+			if (extensionsSupported) 
+			{
+				//TODO: Currently only require at least a single supported image format and a single supported presentation mode 
+				const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device, surface);
+				swapChainAdequate = !swapChainSupport.Formats.empty() && !swapChainSupport.PresentModes.empty();
+			}
+			return indices.IsComplete() && extensionsSupported && swapChainAdequate;
+		}
 
-		//int rateDeviceSuitability(VkPhysicalDevice device) {
-		//	...
+		// ------------------------ Functions to create the best possible swap chain ------------------------  //
+		// 3 settings
+		// 1: surface format (color depth)
+		// 2. presentation mode (conditions for swapping images to the screen)
+		// 3. swap extent (resolution of images in swap chain)
 
-		//		int score = 0;
+		//////////////////////////////////////////////////
+		//// Surface Format 
+		//////////////////////////////////////////////////
+		// prefer srgb colorspace: https://stackoverflow.com/questions/12524623/what-are-the-practical-differences-when-working-with-colors-in-a-linear-vs-a-no
+		VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+		{
+			for (const auto& availableFormat : availableFormats)
+			{
+				if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM // standard rgb color format 
+					&&
+					availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) // srgb color space 
+				{
+					return availableFormat;
+				}
+				return availableFormats[0];
+			}
+		}
 
-		//	// Discrete GPUs have a significant performance advantage
-		//	if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-		//		score += 1000;
-		//	}
+		//////////////////////////////////////////////////
+		//// Presentation Mode
+		//////////////////////////////////////////////////
+		// 4 modes
+		// 1. Immediate
+		// 2. FIFO (Queue)  [GUARANTEED TO BE AVAILABLE]
+		// 3. FIFO Relaxed (Relaxed Queue) 
+		// 4. MAILBOX (Best->Triple buffering capabilities.... No queue bottleneck)
+		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+		{
+			for (const auto& availablePresentMode : availablePresentModes) 
+			{
+				if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) 
+				{
+					return availablePresentMode;
+				}
+			}
+			return VK_PRESENT_MODE_FIFO_KHR;
+		}
 
-		//	// Maximum possible size of textures affects graphics quality
-		//	score += deviceProperties.limits.maxImageDimension2D;
-
-		//	// Application can't function without geometry shaders
-		//	if (!deviceFeatures.geometryShader) {
-		//		return 0;
-		//	}
-
-		//	return score;
-		//}
-		////////////////////////////////////////////////////////////////////////
+		//////////////////////////////////////////////////
+		//// Swap Extent
+		//////////////////////////////////////////////////
+		VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+		{
+			if (capabilities.currentExtent.width != UINT32_MAX) 
+			{
+				return capabilities.currentExtent;
+			}
+			else 
+			{
+				//TODO: Access width and height from window data directly.
+				VkExtent2D actualExtent = { 800, 600 }; 
+				actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+				actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+				return actualExtent;
+			}
+		}
+		
 	}
 }

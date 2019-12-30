@@ -20,6 +20,7 @@
 #include <utility>
 #include <algorithm>
 #include <functional>
+#include <set>
 
 #include <fstream>
 #include <string>

@@ -39,11 +39,17 @@ namespace Vulkan_Engine
 
 		void Window::Cleanup()
 		{
+			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
+			{
+				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+			}
+			vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
 			vkDestroyDevice(m_LogicalDevice, nullptr); // clean logical device 
 			if (s_EnableValidationLayers) 
 			{
 				DestroyDebugUtilsMessengerEXT(m_VkInstance, m_DebugCallbackMessenger, nullptr); // clean layers debugger
-			}			
+			}
+			vkDestroySurfaceKHR(m_VkInstance, m_WindowSurface, nullptr); // destroy the window surface (before the instance) 
 			vkDestroyInstance(m_VkInstance, nullptr); // clean active vulkan instance 
 			glfwDestroyWindow(m_Window); // clean glfw window 
 			glfwTerminate(); // terminate window 
@@ -120,8 +126,11 @@ namespace Vulkan_Engine
 			VK_CORE_DEBUG("[Graphics System]: Initializing Vulkan");
 			CreateVulkanInstance();
 			CreateVulkanDebugMessenger();
+			CreateVulkanWindowSurface();
 			InitVulkanPhysicalDevice();
 			InitVulkanLogicalDevice();
+			CreateVulkanSwapChain();
+			CreateVulkanImageViews();
 		}
 
 		void Window::CreateVulkanInstance()
@@ -129,7 +138,7 @@ namespace Vulkan_Engine
 			if(s_EnableValidationLayers && !AreValidationLayersAvailable())
 			{
 				VK_CORE_CRITICAL("[Graphics System]: Validation layers requested, but not available!");
-				throw std::runtime_error("VALIDATION LAYERS: requested, but not available!");				
+				throw std::runtime_error("VALIDATION LAYERS: requested, but not available!");
 			}
 
 			// optional
@@ -159,8 +168,8 @@ namespace Vulkan_Engine
 			// validation layers
 			if(s_EnableValidationLayers)
 			{
-				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-				createInfo.ppEnabledLayerNames = validationLayers.data();
+				createInfo.enabledLayerCount = static_cast<uint32_t>(s_ValidationLayers.size());
+				createInfo.ppEnabledLayerNames = s_ValidationLayers.data();
 
 				PopulateDebugMessengerCreateInfo(debugCreateInfo, &m_WindowData);
 				createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)& debugCreateInfo;
@@ -175,6 +184,28 @@ namespace Vulkan_Engine
 			// Creates the vulkan instance 
 			const VkResult result = vkCreateInstance(&createInfo, nullptr, &m_VkInstance);
 			VK_CORE_ASSERT(result == VK_SUCCESS, result);
+		}
+
+		void Window::CreateVulkanWindowSurface()
+		{
+			//////////////////////////////////////////////////////////////////
+			///todo: This is an example of how the extension would be implemented without glfw (win32 specific)
+			//VkWin32SurfaceCreateInfoKHR createInfo = {};
+			//createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+			//createInfo.hwnd = glfwGetWin32Window(window);
+			//createInfo.hinstance = GetModuleHandle(nullptr);
+			//if (vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, &surface) != VK_SUCCESS) {
+			//throw std::runtime_error("failed to create window surface!");
+			//}
+			//////////////////////////////////////////////////////////////////
+
+			// the glfw version of assigning a window surface (m_WindowSurface)
+			if (glfwCreateWindowSurface(m_VkInstance, m_Window, nullptr, &m_WindowSurface) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateVulkanWindowSurface]:Failed to create window surface!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
 		}
 
 		// ------------------------------ Vulkan Debug Settup ------------------------------
@@ -223,7 +254,7 @@ namespace Vulkan_Engine
 			//TODO: change this to give user options, or choose device with the best score
 			for (const auto& device : availableDevices) 
 			{
-				if (IsGraphicsVulkanCompatible(device)) 
+				if (IsGraphicsVulkanCompatible(device, m_WindowSurface)) 
 				{
 					m_PhysicalDevice = device;
 					break;
@@ -238,36 +269,45 @@ namespace Vulkan_Engine
 			}
 
 		}
+		
 
 		void Window::InitVulkanLogicalDevice()
 		{
 			// m_LogicalDevice
-			QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+			QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice, m_WindowSurface);
 
-			// specify the queues to be created
-			VkDeviceQueueCreateInfo queueCreateInfo = {};
-			queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			queueCreateInfo.queueFamilyIndex = indices.GraphicsFamily.value();
-			queueCreateInfo.queueCount = 1;
+			// specify the queues to be created (we require multiple of these to create a queue for each family)
+			std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+			std::set<uint32_t> uniqueQueueFamilies = { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
 			static const float queuePriority = 1.0f;
-			queueCreateInfo.pQueuePriorities = &queuePriority;
-
+			for (uint32_t queueFamily : uniqueQueueFamilies) // for all family queues 
+			{
+				VkDeviceQueueCreateInfo queueCreateInfo = {};
+				queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+				queueCreateInfo.queueFamilyIndex = queueFamily;
+				queueCreateInfo.queueCount = 1;
+				queueCreateInfo.pQueuePriorities = &queuePriority;
+				queueCreateInfos.push_back(queueCreateInfo);
+			}
+			
 			// specify features of device being used
 			VkPhysicalDeviceFeatures deviceFeatures = {}; //TODO: Come back to this
 
 			// create the logical device info
 			VkDeviceCreateInfo createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-			createInfo.pQueueCreateInfos = &queueCreateInfo;
-			createInfo.queueCreateInfoCount = 1;
+			createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+			createInfo.pQueueCreateInfos = queueCreateInfos.data();
 			createInfo.pEnabledFeatures = &deviceFeatures;
-			
-			createInfo.enabledExtensionCount = 0;
+			// setup swap chain extensions
+			createInfo.enabledExtensionCount = s_DeviceExtensions.size();
+			createInfo.ppEnabledExtensionNames = s_DeviceExtensions.data();
+
 			if (s_EnableValidationLayers) 
 			{
 				// enabled layer count and enabled layer names aren't used in new specs of vulkan (Set them for backwards compatibility)
-				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-				createInfo.ppEnabledLayerNames = validationLayers.data();
+				createInfo.enabledLayerCount = static_cast<uint32_t>(s_ValidationLayers.size());
+				createInfo.ppEnabledLayerNames = s_ValidationLayers.data();
 			}
 			else 
 			{
@@ -282,6 +322,114 @@ namespace Vulkan_Engine
 				throw std::runtime_error(message);
 			}
 			vkGetDeviceQueue(m_LogicalDevice, indices.GraphicsFamily.value(), 0, &m_GraphicsQueueHandle);
+			vkGetDeviceQueue(m_LogicalDevice, indices.PresentFamily.value(), 0, &m_PresentQueueHandle);
+		}
+
+		void Window::CreateVulkanSwapChain()
+		{
+			const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(m_PhysicalDevice, m_WindowSurface);
+			const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.Formats);
+			const VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.PresentModes);
+			const VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities);
+
+			// decide how many images to have in the swap chain
+			uint32_t imageCount = swapChainSupport.Capabilities.minImageCount + 1; // minimum number of images required for swap chain to function
+			if (swapChainSupport.Capabilities.maxImageCount > 0 && imageCount > swapChainSupport.Capabilities.maxImageCount)
+			{
+				imageCount = swapChainSupport.Capabilities.maxImageCount;
+			}
+
+			// create the swap chain
+			VkSwapchainCreateInfoKHR createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+			createInfo.surface = m_WindowSurface; // specify the surface 
+
+			// specify details of swap chain images
+			createInfo.minImageCount = imageCount;
+			createInfo.imageFormat = surfaceFormat.format;
+			createInfo.imageColorSpace = surfaceFormat.colorSpace;
+			createInfo.imageExtent = extent;
+			createInfo.imageArrayLayers = 1; // amount of layers each image consists of  (1 unless developing stereoscopic 3D)
+			// VK_IMAGE_USAGE_TRANSFER_DST_BIT  for post processing (for example) 
+			createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // ([currently -> color attachment] | depth attachment etc....) bit field: what kind of operations will use images in swap chain for
+
+			// specify how to handle swap chain images across multiple queue families
+			// draw on images from graphics queue, then submit using presentation queue
+			// 2 ways to handle images accessed from multiple queues:
+			// 1. EXCLUSIVE [BEST PERFORMANCE]: image owned by one queue family at a time, and ownership must be explicitly transferred before using it in another queue family. 
+			// 2. CONCURRENT: Images can be used across multiple queue families without explicit ownership transfers.			
+			const QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice, m_WindowSurface);
+			const uint32_t queueFamilyIndices[] = { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
+			if (indices.GraphicsFamily != indices.PresentFamily) 
+			{
+				createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT; // require advanced spec of which queue families will share ownership
+				createInfo.queueFamilyIndexCount = 2;
+				createInfo.pQueueFamilyIndices = queueFamilyIndices;
+			}
+			else 
+			{
+				createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+				createInfo.queueFamilyIndexCount = 0; // Optional
+				createInfo.pQueueFamilyIndices = nullptr; // Optional
+			}
+			// apply certain transforms to images in the swap chain if supported (supportedTransforms in Capbilities) 
+			createInfo.preTransform = swapChainSupport.Capabilities.currentTransform; // specifies no transform (use supported transforms to search for available ones) 
+
+			// specify if the alpha channel should be used for blending with other windows in the window system. 
+			createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // ignores alpha channel
+
+			// 
+			createInfo.presentMode = presentMode;
+			createInfo.clipped = VK_TRUE; // do we care about the color of pixels that are obscured? (other windows infront?) (only turn off when need predictability)
+
+			// 
+			createInfo.oldSwapchain = VK_NULL_HANDLE; //TODO: Come back to this when dealing with swapchain recreations (when swapchains become invalid)
+			if (vkCreateSwapchainKHR(m_LogicalDevice, &createInfo, nullptr, &m_SwapChain) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateVulkanSwapChain]: Failed to create swap chain!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			m_SwapChainImages = GetVulkanData<VkImage>(vkGetSwapchainImagesKHR,m_LogicalDevice, m_SwapChain);
+			m_SwapChainImageFormat = surfaceFormat.format;
+			m_SwapChainExtent = extent;
+		}
+
+		void Window::CreateVulkanImageViews()
+		{
+			m_SwapChainImageViews.resize(m_SwapChainImages.size());
+			for (size_t i = 0; i < m_SwapChainImages.size(); i++)
+			{
+				// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkImageViewCreateInfo.html
+				// set an info for each chain image before creating it 
+				VkImageViewCreateInfo createInfo = {};
+				createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; 
+				createInfo.image = m_SwapChainImages[i];
+				// how should the image be interpreted 
+				createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;   // 1D, 2D, 3D, cubemaps
+				createInfo.format = m_SwapChainImageFormat;
+				// Swizzle color channels -> maps the rgba components to specific channels 
+				createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+				createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+				createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+				createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+				// describes what the image's purpose is & which part of the image should be accessed.
+				createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // use image as a color target
+				createInfo.subresourceRange.baseMipLevel = 0; // no mipmap generation 
+				createInfo.subresourceRange.levelCount = 1;
+				createInfo.subresourceRange.baseArrayLayer = 0;
+				//If you were working on a stereographic 3D application, then you would create a swap chain with multiple layers.You could then create multiple image views for each image representing the views for the leftand right eyes by accessing different layers.
+				createInfo.subresourceRange.layerCount = 1; // image will have a single layer
+
+				// create the image view
+				if (vkCreateImageView(m_LogicalDevice, &createInfo, nullptr, &m_SwapChainImageViews[i]) != VK_SUCCESS) 
+				{
+					static const std::string message = "[GraphicsSystem::Window::CreateVulkanImageViews]: Failed to create image view!";
+					VK_CORE_CRITICAL(message);
+					throw std::runtime_error(message);		
+				}
+			}
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------
