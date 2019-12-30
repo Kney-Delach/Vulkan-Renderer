@@ -20,6 +20,8 @@
 
 #include "Core/Events/Event.h"
 
+#include "Shaders/Shader.h"
+
 namespace Vulkan_Engine
 {
 	// forward declarations 
@@ -80,7 +82,8 @@ namespace Vulkan_Engine
 			void InitVulkanPhysicalDevice();
 			void InitVulkanLogicalDevice();
 			void CreateVulkanSwapChain(); 
-			void CreateVulkanImageViews(); 
+			void CreateVulkanImageViews();
+			void CreateGraphicsPipeline(); 
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 

@@ -43,6 +43,7 @@ project "Engine"
 		"%{prj.name}/src/**.cpp",
 		"%{prj.name}/Dependencies/glm/glm/**.hpp",
 		"%{prj.name}/Dependencies/glm/glm/**.inl"
+		-- "Resources/Shaders/**.spv"
 	}
 
 	defines
@@ -57,7 +58,7 @@ project "Engine"
 		"%{IncludeDir.GLFW}",
 		"%{IncludeDir.glm}",
 		"C:/VulkanSDK/1.1.130.0/Include",
-		"Resources/"
+		"%{prj.name}/Resources/"
 	}
 
 	libdirs 

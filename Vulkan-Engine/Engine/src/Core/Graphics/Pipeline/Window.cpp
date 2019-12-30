@@ -131,6 +131,7 @@ namespace Vulkan_Engine
 			InitVulkanLogicalDevice();
 			CreateVulkanSwapChain();
 			CreateVulkanImageViews();
+			CreateGraphicsPipeline();
 		}
 
 		void Window::CreateVulkanInstance()
@@ -189,7 +190,7 @@ namespace Vulkan_Engine
 		void Window::CreateVulkanWindowSurface()
 		{
 			//////////////////////////////////////////////////////////////////
-			///todo: This is an example of how the extension would be implemented without glfw (win32 specific)
+			////todo: This is an example of how the extension would be implemented without glfw (win32 specific)
 			//VkWin32SurfaceCreateInfoKHR createInfo = {};
 			//createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 			//createInfo.hwnd = glfwGetWin32Window(window);
@@ -430,6 +431,32 @@ namespace Vulkan_Engine
 					throw std::runtime_error(message);		
 				}
 			}
+		}
+
+		void Window::CreateGraphicsPipeline()
+		{
+			//TODO: Maybe something like this? Shader::SetActiveLogicalDevice(m_LogicalDevice); 
+			const Shader vertexShader("Resources/Shaders/Vert.spv", &m_LogicalDevice);
+			const Shader fragmentShader("Resources/Shaders/Frag.spv", &m_LogicalDevice);
+
+			// create vertex shader info 
+			VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
+			vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO; 
+			vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT; // set shader type as vertex
+			vertShaderStageInfo.module = vertexShader.GetShaderModule();; // set shader data 
+			vertShaderStageInfo.pName = "main"; // function to invoke 
+			vertShaderStageInfo.pSpecializationInfo = nullptr; // used to set constant data for branch prediction
+
+			// create fragment shader info 
+			VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
+			fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+			fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+			fragShaderStageInfo.module = fragmentShader.GetShaderModule();;
+			fragShaderStageInfo.pName = "main";
+			vertShaderStageInfo.pSpecializationInfo = nullptr; // used to set constant data for branch prediction
+
+			// used to reference creation structs during pipeline creation stage 
+			VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------
