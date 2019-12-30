@@ -39,6 +39,10 @@ namespace Vulkan_Engine
 
 		void Window::Cleanup()
 		{
+			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
+			{
+				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+			}
 			vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
 			vkDestroyDevice(m_LogicalDevice, nullptr); // clean logical device 
 			if (s_EnableValidationLayers) 
@@ -126,6 +130,7 @@ namespace Vulkan_Engine
 			InitVulkanPhysicalDevice();
 			InitVulkanLogicalDevice();
 			CreateVulkanSwapChain();
+			CreateVulkanImageViews();
 		}
 
 		void Window::CreateVulkanInstance()
@@ -389,6 +394,42 @@ namespace Vulkan_Engine
 			m_SwapChainImages = GetVulkanData<VkImage>(vkGetSwapchainImagesKHR,m_LogicalDevice, m_SwapChain);
 			m_SwapChainImageFormat = surfaceFormat.format;
 			m_SwapChainExtent = extent;
+		}
+
+		void Window::CreateVulkanImageViews()
+		{
+			m_SwapChainImageViews.resize(m_SwapChainImages.size());
+			for (size_t i = 0; i < m_SwapChainImages.size(); i++)
+			{
+				// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkImageViewCreateInfo.html
+				// set an info for each chain image before creating it 
+				VkImageViewCreateInfo createInfo = {};
+				createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; 
+				createInfo.image = m_SwapChainImages[i];
+				// how should the image be interpreted 
+				createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;   // 1D, 2D, 3D, cubemaps
+				createInfo.format = m_SwapChainImageFormat;
+				// Swizzle color channels -> maps the rgba components to specific channels 
+				createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+				createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+				createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+				createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+				// describes what the image's purpose is & which part of the image should be accessed.
+				createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // use image as a color target
+				createInfo.subresourceRange.baseMipLevel = 0; // no mipmap generation 
+				createInfo.subresourceRange.levelCount = 1;
+				createInfo.subresourceRange.baseArrayLayer = 0;
+				//If you were working on a stereographic 3D application, then you would create a swap chain with multiple layers.You could then create multiple image views for each image representing the views for the leftand right eyes by accessing different layers.
+				createInfo.subresourceRange.layerCount = 1; // image will have a single layer
+
+				// create the image view
+				if (vkCreateImageView(m_LogicalDevice, &createInfo, nullptr, &m_SwapChainImageViews[i]) != VK_SUCCESS) 
+				{
+					static const std::string message = "[GraphicsSystem::Window::CreateVulkanImageViews]: Failed to create image view!";
+					VK_CORE_CRITICAL(message);
+					throw std::runtime_error(message);		
+				}
+			}
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------

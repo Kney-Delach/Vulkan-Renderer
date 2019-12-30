@@ -80,6 +80,7 @@ namespace Vulkan_Engine
 			void InitVulkanPhysicalDevice();
 			void InitVulkanLogicalDevice();
 			void CreateVulkanSwapChain(); 
+			void CreateVulkanImageViews(); 
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -95,9 +96,9 @@ namespace Vulkan_Engine
 			VkSurfaceKHR m_WindowSurface;// window surface (create directly after instance creation as can affect physical device)
 			VkSwapchainKHR m_SwapChain;
 			std::vector<VkImage> m_SwapChainImages;
+			std::vector<VkImageView> m_SwapChainImageViews; // describes how to access an image, and which part of the image to access.
 			VkFormat m_SwapChainImageFormat;
 			VkExtent2D m_SwapChainExtent;
-
 		};
 	}
 }
