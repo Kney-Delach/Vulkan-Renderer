@@ -32,7 +32,9 @@ namespace Vulkan_Engine
 		}
 
 		//TODO: move this from here into a validation abstraction
-		const std::vector<const char*> validationLayers = { "VK_LAYER_KHRONOS_validation" };
+		const std::vector<const char*> s_ValidationLayers = { "VK_LAYER_KHRONOS_validation" };
+		const std::vector<const char*> s_DeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+
 #ifdef VKE_DEBUG
 		const bool s_EnableValidationLayers = true;
 #else
@@ -48,7 +50,7 @@ namespace Vulkan_Engine
 		{
 			// get the available validation layers
 			auto availableLayers = GetVulkanData<VkLayerProperties>(vkEnumerateInstanceLayerProperties);
-			for (const char* layerName : validationLayers) 
+			for (const char* layerName : s_ValidationLayers)
 			{
 				bool layerFound = false;
 				for (const auto& layerProperties : availableLayers) 
@@ -140,60 +142,50 @@ namespace Vulkan_Engine
 			return indices;
 		}
 
-		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device, VkSurfaceKHR& surface)
+		// used in swap chain verifications
+		bool CheckDeviceExtensionSupport(VkPhysicalDevice device)
 		{
-			//VkPhysicalDeviceProperties deviceProperties;
-			//vkGetPhysicalDeviceProperties(device, &deviceProperties);
-			//VkPhysicalDeviceFeatures deviceFeatures; // use this to query additional feature support (64b-float, compressions, viewports)
-			//vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-			//return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
-
-			const QueueFamilyIndices indices = FindQueueFamilies(device, surface);
-			return indices.IsComplete();
+			const auto availableExtensions = GetVulkanData<VkExtensionProperties>(vkEnumerateDeviceExtensionProperties, device, nullptr);
+			std::set<std::string> requiredExtensions(s_DeviceExtensions.begin(), s_DeviceExtensions.end());
+			for (const auto& extension : availableExtensions) 
+			{
+				requiredExtensions.erase(extension.extensionName);
+			}
+			return requiredExtensions.empty();
 		}
 
-		//////////////////////////////////////////////////////////////////////
-		//TODO: Implement something like below, for choosing optimal card
-		//void pickPhysicalDevice() {
-		//	...
+		// swap chain setup
+		
+		struct SwapChainSupportDetails
+		{
+			VkSurfaceCapabilitiesKHR Capabilities; // min/max number of images in sc, min/max width / height of images 
+			std::vector<VkSurfaceFormatKHR> Formats; // pixel format, color space .... 
+			std::vector<VkPresentModeKHR> PresentModes; // available presentation modes
+		};
 
-		//		// Use an ordered map to automatically sort candidates by increasing score
-		//		std::multimap<int, VkPhysicalDevice> candidates;
+		// populates a swap chain for some physical device  (physical | logical devices are the core components of the swap chain) 
+		SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device, VkSurfaceKHR& surface)
+		{
+			SwapChainSupportDetails details;
+			vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.Capabilities); //  supported capabilities
+			details.Formats = GetVulkanData<VkSurfaceFormatKHR>(vkGetPhysicalDeviceSurfaceFormatsKHR,device,surface); // supported surface formats 
+			details.PresentModes = GetVulkanData<VkPresentModeKHR>(vkGetPhysicalDeviceSurfacePresentModesKHR, device, surface);
+			return details;
+		}
 
-		//	for (const auto& device : devices) {
-		//		int score = rateDeviceSuitability(device);
-		//		candidates.insert(std::make_pair(score, device));
-		//	}
+		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device, VkSurfaceKHR& surface)
+		{
+			const QueueFamilyIndices indices = FindQueueFamilies(device, surface);
+			const bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
-		//	// Check if the best candidate is suitable at all
-		//	if (candidates.rbegin()->first > 0) {
-		//		physicalDevice = candidates.rbegin()->second;
-		//	}
-		//	else {
-		//		throw std::runtime_error("failed to find a suitable GPU!");
-		//	}
-		//}
-
-		//int rateDeviceSuitability(VkPhysicalDevice device) {
-		//	...
-
-		//		int score = 0;
-
-		//	// Discrete GPUs have a significant performance advantage
-		//	if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-		//		score += 1000;
-		//	}
-
-		//	// Maximum possible size of textures affects graphics quality
-		//	score += deviceProperties.limits.maxImageDimension2D;
-
-		//	// Application can't function without geometry shaders
-		//	if (!deviceFeatures.geometryShader) {
-		//		return 0;
-		//	}
-
-		//	return score;
-		//}
-		////////////////////////////////////////////////////////////////////////
+			bool swapChainAdequate = false;
+			if (extensionsSupported) 
+			{
+				//TODO: Currently only require at least a single supported image format and a single supported presentation mode 
+				const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device, surface);
+				swapChainAdequate = !swapChainSupport.Formats.empty() && !swapChainSupport.PresentModes.empty();
+			}
+			return indices.IsComplete() && extensionsSupported && swapChainAdequate;
+		}
 	}
 }

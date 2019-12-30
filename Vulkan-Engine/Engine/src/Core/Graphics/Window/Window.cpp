@@ -161,8 +161,8 @@ namespace Vulkan_Engine
 			// validation layers
 			if(s_EnableValidationLayers)
 			{
-				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-				createInfo.ppEnabledLayerNames = validationLayers.data();
+				createInfo.enabledLayerCount = static_cast<uint32_t>(s_ValidationLayers.size());
+				createInfo.ppEnabledLayerNames = s_ValidationLayers.data();
 
 				PopulateDebugMessengerCreateInfo(debugCreateInfo, &m_WindowData);
 				createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)& debugCreateInfo;
@@ -292,13 +292,15 @@ namespace Vulkan_Engine
 			createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
 			createInfo.pQueueCreateInfos = queueCreateInfos.data();
 			createInfo.pEnabledFeatures = &deviceFeatures;
-			createInfo.enabledExtensionCount = 0;
+			// setup swap chain extensions
+			createInfo.enabledExtensionCount = s_DeviceExtensions.size();
+			createInfo.ppEnabledExtensionNames = s_DeviceExtensions.data();
 
 			if (s_EnableValidationLayers) 
 			{
 				// enabled layer count and enabled layer names aren't used in new specs of vulkan (Set them for backwards compatibility)
-				createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
-				createInfo.ppEnabledLayerNames = validationLayers.data();
+				createInfo.enabledLayerCount = static_cast<uint32_t>(s_ValidationLayers.size());
+				createInfo.ppEnabledLayerNames = s_ValidationLayers.data();
 			}
 			else 
 			{
