@@ -3,6 +3,7 @@
 #include <optional>
 #include <vector>
 #include <cstring>
+#include <cstdint> // uint32_max 
 
 #include <vulkan/vulkan.h>
 
@@ -187,5 +188,69 @@ namespace Vulkan_Engine
 			}
 			return indices.IsComplete() && extensionsSupported && swapChainAdequate;
 		}
+
+		// ------------------------ Functions to create the best possible swap chain ------------------------  //
+		// 3 settings
+		// 1: surface format (color depth)
+		// 2. presentation mode (conditions for swapping images to the screen)
+		// 3. swap extent (resolution of images in swap chain)
+
+		//////////////////////////////////////////////////
+		//// Surface Format 
+		//////////////////////////////////////////////////
+		// prefer srgb colorspace: https://stackoverflow.com/questions/12524623/what-are-the-practical-differences-when-working-with-colors-in-a-linear-vs-a-no
+		VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
+		{
+			for (const auto& availableFormat : availableFormats)
+			{
+				if (availableFormat.format == VK_FORMAT_B8G8R8A8_UNORM // standard rgb color format 
+					&&
+					availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) // srgb color space 
+				{
+					return availableFormat;
+				}
+				return availableFormats[0];
+			}
+		}
+
+		//////////////////////////////////////////////////
+		//// Presentation Mode
+		//////////////////////////////////////////////////
+		// 4 modes
+		// 1. Immediate
+		// 2. FIFO (Queue)  [GUARANTEED TO BE AVAILABLE]
+		// 3. FIFO Relaxed (Relaxed Queue) 
+		// 4. MAILBOX (Best->Triple buffering capabilities.... No queue bottleneck)
+		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
+		{
+			for (const auto& availablePresentMode : availablePresentModes) 
+			{
+				if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) 
+				{
+					return availablePresentMode;
+				}
+			}
+			return VK_PRESENT_MODE_FIFO_KHR;
+		}
+
+		//////////////////////////////////////////////////
+		//// Swap Extent
+		//////////////////////////////////////////////////
+		VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+		{
+			if (capabilities.currentExtent.width != UINT32_MAX) 
+			{
+				return capabilities.currentExtent;
+			}
+			else 
+			{
+				//TODO: Access width and height from window data directly.
+				VkExtent2D actualExtent = { 800, 600 }; 
+				actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+				actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+				return actualExtent;
+			}
+		}
+		
 	}
 }

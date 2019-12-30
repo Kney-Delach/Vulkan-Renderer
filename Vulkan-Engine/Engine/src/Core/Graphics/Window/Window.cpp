@@ -39,6 +39,7 @@ namespace Vulkan_Engine
 
 		void Window::Cleanup()
 		{
+			vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
 			vkDestroyDevice(m_LogicalDevice, nullptr); // clean logical device 
 			if (s_EnableValidationLayers) 
 			{
@@ -124,6 +125,7 @@ namespace Vulkan_Engine
 			CreateVulkanWindowSurface();
 			InitVulkanPhysicalDevice();
 			InitVulkanLogicalDevice();
+			CreateVulkanSwapChain();
 		}
 
 		void Window::CreateVulkanInstance()
@@ -131,7 +133,7 @@ namespace Vulkan_Engine
 			if(s_EnableValidationLayers && !AreValidationLayersAvailable())
 			{
 				VK_CORE_CRITICAL("[Graphics System]: Validation layers requested, but not available!");
-				throw std::runtime_error("VALIDATION LAYERS: requested, but not available!");				
+				throw std::runtime_error("VALIDATION LAYERS: requested, but not available!");
 			}
 
 			// optional
@@ -316,6 +318,77 @@ namespace Vulkan_Engine
 			}
 			vkGetDeviceQueue(m_LogicalDevice, indices.GraphicsFamily.value(), 0, &m_GraphicsQueueHandle);
 			vkGetDeviceQueue(m_LogicalDevice, indices.PresentFamily.value(), 0, &m_PresentQueueHandle);
+		}
+
+		void Window::CreateVulkanSwapChain()
+		{
+			const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(m_PhysicalDevice, m_WindowSurface);
+			const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.Formats);
+			const VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.PresentModes);
+			const VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities);
+
+			// decide how many images to have in the swap chain
+			uint32_t imageCount = swapChainSupport.Capabilities.minImageCount + 1; // minimum number of images required for swap chain to function
+			if (swapChainSupport.Capabilities.maxImageCount > 0 && imageCount > swapChainSupport.Capabilities.maxImageCount)
+			{
+				imageCount = swapChainSupport.Capabilities.maxImageCount;
+			}
+
+			// create the swap chain
+			VkSwapchainCreateInfoKHR createInfo = {};
+			createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+			createInfo.surface = m_WindowSurface; // specify the surface 
+
+			// specify details of swap chain images
+			createInfo.minImageCount = imageCount;
+			createInfo.imageFormat = surfaceFormat.format;
+			createInfo.imageColorSpace = surfaceFormat.colorSpace;
+			createInfo.imageExtent = extent;
+			createInfo.imageArrayLayers = 1; // amount of layers each image consists of  (1 unless developing stereoscopic 3D)
+			// VK_IMAGE_USAGE_TRANSFER_DST_BIT  for post processing (for example) 
+			createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // ([currently -> color attachment] | depth attachment etc....) bit field: what kind of operations will use images in swap chain for
+
+			// specify how to handle swap chain images across multiple queue families
+			// draw on images from graphics queue, then submit using presentation queue
+			// 2 ways to handle images accessed from multiple queues:
+			// 1. EXCLUSIVE [BEST PERFORMANCE]: image owned by one queue family at a time, and ownership must be explicitly transferred before using it in another queue family. 
+			// 2. CONCURRENT: Images can be used across multiple queue families without explicit ownership transfers.			
+			const QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice, m_WindowSurface);
+			const uint32_t queueFamilyIndices[] = { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
+			if (indices.GraphicsFamily != indices.PresentFamily) 
+			{
+				createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT; // require advanced spec of which queue families will share ownership
+				createInfo.queueFamilyIndexCount = 2;
+				createInfo.pQueueFamilyIndices = queueFamilyIndices;
+			}
+			else 
+			{
+				createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+				createInfo.queueFamilyIndexCount = 0; // Optional
+				createInfo.pQueueFamilyIndices = nullptr; // Optional
+			}
+			// apply certain transforms to images in the swap chain if supported (supportedTransforms in Capbilities) 
+			createInfo.preTransform = swapChainSupport.Capabilities.currentTransform; // specifies no transform (use supported transforms to search for available ones) 
+
+			// specify if the alpha channel should be used for blending with other windows in the window system. 
+			createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR; // ignores alpha channel
+
+			// 
+			createInfo.presentMode = presentMode;
+			createInfo.clipped = VK_TRUE; // do we care about the color of pixels that are obscured? (other windows infront?) (only turn off when need predictability)
+
+			// 
+			createInfo.oldSwapchain = VK_NULL_HANDLE; //TODO: Come back to this when dealing with swapchain recreations (when swapchains become invalid)
+			if (vkCreateSwapchainKHR(m_LogicalDevice, &createInfo, nullptr, &m_SwapChain) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateVulkanSwapChain]: Failed to create swap chain!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			m_SwapChainImages = GetVulkanData<VkImage>(vkGetSwapchainImagesKHR,m_LogicalDevice, m_SwapChain);
+			m_SwapChainImageFormat = surfaceFormat.format;
+			m_SwapChainExtent = extent;
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------
