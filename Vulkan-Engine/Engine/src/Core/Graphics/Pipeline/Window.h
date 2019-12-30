@@ -102,6 +102,7 @@ namespace Vulkan_Engine
 			std::vector<VkImageView> m_SwapChainImageViews; // describes how to access an image, and which part of the image to access.
 			VkFormat m_SwapChainImageFormat;
 			VkExtent2D m_SwapChainExtent;
+			VkPipelineLayout m_PipelineLayout;
 		};
 	}
 }

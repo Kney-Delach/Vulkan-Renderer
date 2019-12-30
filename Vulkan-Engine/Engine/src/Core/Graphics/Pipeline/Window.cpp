@@ -39,6 +39,7 @@ namespace Vulkan_Engine
 
 		void Window::Cleanup()
 		{
+			vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr); // pipeline layout  (data passed to shaders)
 			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
 			{
 				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
@@ -457,6 +458,179 @@ namespace Vulkan_Engine
 
 			// used to reference creation structs during pipeline creation stage 
 			VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+			////////////////////////////////////////////
+			// 1. Vertex Input
+			////////////////////////////////////////////
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineVertexInputStateCreateInfo.html
+			VkPipelineVertexInputStateCreateInfo vertexInputInfo = {}; // format of the vertex data to pass to vertex shader 
+			vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+			// bindings: spacing between data and wheter data is per-vertex or per-instance
+			vertexInputInfo.vertexBindingDescriptionCount = 0; 
+			vertexInputInfo.pVertexBindingDescriptions = nullptr; // Point to array of structs that contain the descriptions of the data
+			// attributes: /type of attributes and which binding to load them from & at which offset 
+			vertexInputInfo.vertexAttributeDescriptionCount = 0;
+			vertexInputInfo.pVertexAttributeDescriptions = nullptr; // same as bindings descriptions 
+
+			////////////////////////////////////////////
+			// 2. Input Assembly 
+			////////////////////////////////////////////
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineInputAssemblyStateCreateInfo.html
+			// [1]: what kind of geometry will be drawn (stored in topology)
+			// VK_PRIMITIVE_TOPOLOGY_POINT_LIST: points from vertices
+			// VK_PRIMITIVE_TOPOLOGY_LINE_LIST: line from every 2 vertices without reuse
+			// VK_PRIMITIVE_TOPOLOGY_LINE_STRIP : the end vertex of every line is used as start vertex for the next line
+			// VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST : triangle from every 3 vertices without reuse
+			// VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP : the second and third vertex of every triangle are used as first two vertices of the next triangle
+			// [2]: Is primitive restart enabled
+			VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+			inputAssembly.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+			inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			inputAssembly.primitiveRestartEnable = VK_FALSE; // set to true to break up lines and triangles in strip
+
+			////////////////////////////////////////////
+			// 3. Viewports & Scissors 
+			////////////////////////////////////////////
+			// assign a window viewport to render entire window to
+			VkViewport viewport = {};
+			viewport.x = 0.0f; // bottom left x
+			viewport.y = 0.0f; // bottom left y
+			viewport.width = (float)m_SwapChainExtent.width; // top right x
+			viewport.height = (float)m_SwapChainExtent.height; // top right y
+			viewport.minDepth = 0.0f; // framebuffer value range min
+			viewport.maxDepth = 1.0f; // framebuffer value range max
+
+			// define scissorm for entire window 
+			VkRect2D scissor = {};
+			scissor.offset = { 0, 0 };
+			scissor.extent = m_SwapChainExtent;
+
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineViewportStateCreateInfo.html
+			// It is possible to use multiple viewports and scissor rectangles on some graphics cards, so its members reference an array of them. Using multiple requires enabling a GPU feature (see logical device creation).
+			VkPipelineViewportStateCreateInfo viewportState = {};
+			viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+			viewportState.viewportCount = 1; 
+			viewportState.pViewports = &viewport; 
+			viewportState.scissorCount = 1;  
+			viewportState.pScissors = &scissor;
+
+			////////////////////////////////////////////
+			// 4. Rasterizer
+			////////////////////////////////////////////
+			// performs depth testing, face culling, scissor testing, can output wireframe or full geometry.
+			VkPipelineRasterizationStateCreateInfo rasterizer = {};
+			rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+			rasterizer.depthClampEnable = VK_FALSE; // if true, fragments beyond near and far planes are clamped, rather than discarded (useful in shadow maps -> requires GPU Feature)
+			rasterizer.rasterizerDiscardEnable = VK_FALSE; // if true, geometry never passes through rasterizer -> disables output to framebuffer
+			rasterizer.polygonMode = VK_POLYGON_MODE_FILL; // determines how fragm,ents are generated for geometry (FILL / LINE / POINT) -> any other mode than fill require gpu feature
+			rasterizer.lineWidth = 1.0f; // thickness of lines (number of fragments) (if > 1.0, requires wideLines GPU feature)
+			rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // type of face culling 
+			rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // vertex ordering
+			// alters depth values by adding constants / biasing based on fragment's slope (USAGE:Shadow mapping)
+			rasterizer.depthBiasEnable = VK_FALSE;
+			rasterizer.depthBiasConstantFactor = 0.0f; // Optional
+			rasterizer.depthBiasClamp = 0.0f; // Optional
+			rasterizer.depthBiasSlopeFactor = 0.0f; // Optional
+
+			////////////////////////////////////////////
+			// 5. Multisampling - (anti-aliasing) 
+			////////////////////////////////////////////
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineMultisampleStateCreateInfo.html
+			// Because it doesn't need to run the fragment shader multiple times if only one polygon maps to a pixel,
+			// it is significantly less expensive than simply rendering to a higher resolution and then down-scaling.
+			// Enabling it requires enabling a GPU feature.
+			// DISABLED ~ Will continue later
+			VkPipelineMultisampleStateCreateInfo multisampling = {};
+			multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+			multisampling.sampleShadingEnable = VK_FALSE;
+			multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+			multisampling.minSampleShading = 1.0f; // Optional
+			multisampling.pSampleMask = nullptr; // Optional
+			multisampling.alphaToCoverageEnable = VK_FALSE; // Optional
+			multisampling.alphaToOneEnable = VK_FALSE; // Optional
+
+			////////////////////////////////////////////
+			// 6. Depth and Stencil Testing  
+			////////////////////////////////////////////
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineDepthStencilStateCreateInfo.html
+			// VkPipelineDepthStencilStateCreateInfo
+			
+			////////////////////////////////////////////
+			// 7. Color blending (currently disabling both modes -> no blending occurs) 
+			////////////////////////////////////////////
+			// post fragment shader
+			// 1. Mix the old and new value to produce a final color
+			// 2. Combine the old and new value using a bitwise operation
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineColorBlendAttachmentState.html // config per framebuffer
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineColorBlendStateCreateInfo.html // global color blend settings 
+			// configure color blending using mixing old and new values to produce a final color (method 1)
+			//  The most common way to use color blending is to implement alpha blending,
+			// where we want the new color to be blended with the old color based on its opacity
+			VkPipelineColorBlendAttachmentState colorBlendAttachment = {}; // attachment per framebuffer 
+			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			colorBlendAttachment.blendEnable = VK_FALSE; // if false -> unmodified, otherwise -> mixing operation occurs &'d with colorWriteMask to determine which colors to pass 
+			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+			 
+			//TODO: Example -> alpha opacity blending
+			//colorBlendAttachment.blendEnable = VK_TRUE;
+			//colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			//colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			//colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+			//colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			//colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			//colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+			//TODO: Example
+
+			VkPipelineColorBlendStateCreateInfo colorBlending = {}; 
+			colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+			colorBlending.logicOpEnable = VK_FALSE; // if using combination (method 2) of blending, then set to true (bitwise combination)
+			colorBlending.logicOp = VK_LOGIC_OP_COPY; // sets the bitwise operation in combination approach
+			colorBlending.attachmentCount = 1;
+			colorBlending.pAttachments = &colorBlendAttachment; // references array of structures for all framebuffers 
+			colorBlending.blendConstants[0] = 0.0f; // Optional blend constants
+			colorBlending.blendConstants[1] = 0.0f; // "" 
+			colorBlending.blendConstants[2] = 0.0f; // ""
+			colorBlending.blendConstants[3] = 0.0f; // ""
+
+			////////////////////////////////////////////
+			// 8. Dynamic State 
+			////////////////////////////////////////////
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineDynamicStateCreateInfo.html
+			// A limited amount of the state that we've specified in the previous structs can actually be changed without recreating the pipeline.
+			// size of the viewport, line width and blend constants.
+			// VkPipelineDynamicStateCreateInfo
+			// This will cause the configuration of these values to be ignored and user will be required to specify the data at drawing time
+			//TODO: Return to this in the future, can be substituted by nullptr if doesn't exist 
+			//VkDynamicState dynamicStates[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_LINE_WIDTH };
+			//VkPipelineDynamicStateCreateInfo dynamicState = {};
+			//dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+			//dynamicState.dynamicStateCount = 2;
+			//dynamicState.pDynamicStates = dynamicStates;
+
+			////////////////////////////////////////////
+			// 9. Pipeline Layout 
+			////////////////////////////////////////////
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineLayout.html
+			// uniform values (passed to shaders) must be specified during pipeline creation (VkPipelineLayout)
+			// Push Constants: ways to pass dynamic data to shaders
+			VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+			pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+			pipelineLayoutInfo.setLayoutCount = 0; // Optional
+			pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+			pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
+			pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+
+			if (vkCreatePipelineLayout(m_LogicalDevice, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateGraphicsPipeline]: Failed to create pipeline layout!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------
