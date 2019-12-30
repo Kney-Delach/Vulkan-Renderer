@@ -101,37 +101,46 @@ namespace Vulkan_Engine
 
 		//TODO: Template this to handle any suitability 
 		//////////////////////////////////////////////////////////////////////
-		///
+		// it's actually possible that the queue families supporting drawing commands
+		// and the ones supporting presentation do not overlap.
+		// Therefore we have to take into account that there could be a distinct presentation queue by modifying the QueueFamilyIndices structure:
 		struct QueueFamilyIndices
 		{
-			std::optional<uint32_t> GraphicsFamily;
-			bool IsComplete() const { return GraphicsFamily.has_value(); }
+			std::optional<uint32_t> GraphicsFamily; 
+			std::optional<uint32_t> PresentFamily;   // used to ensure that a device can present images ot the surface created (queue specific feature)
+			_NODISCARD bool IsComplete() const { return GraphicsFamily.has_value() && PresentFamily.has_value(); }
 		};
-		
-		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device)
+
+		// 1: Verify that queue family has capability of presenting to chosen window surface
+		QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device, VkSurfaceKHR& surface)
 		{
 			QueueFamilyIndices indices;
 			// Assign index to queue families that could be found
 			auto queueFamilies = GetVulkanData<VkQueueFamilyProperties>(vkGetPhysicalDeviceQueueFamilyProperties, device);
 
 			int i = 0;
-			for (const auto& queueFamily : queueFamilies) 
-			{
+			for (const auto& queueFamily : queueFamilies) {
 				if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) 
 				{
 					indices.GraphicsFamily = i;
 				}
-
+				VkBool32 presentSupport = false;
+				vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport); // checks if the queue supports the surface
+				if (presentSupport) 
+				{
+					indices.PresentFamily = i;
+				}
 				if (indices.IsComplete()) 
 				{
 					break;
 				}
 				i++;
 			}
+
 			return indices;
 		}
 
-		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device)
+		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device, VkSurfaceKHR& surface)
 		{
 			//VkPhysicalDeviceProperties deviceProperties;
 			//vkGetPhysicalDeviceProperties(device, &deviceProperties);
@@ -139,7 +148,7 @@ namespace Vulkan_Engine
 			//vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
 			//return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU && deviceFeatures.geometryShader;
 
-			const QueueFamilyIndices indices = FindQueueFamilies(device);
+			const QueueFamilyIndices indices = FindQueueFamilies(device, surface);
 			return indices.IsComplete();
 		}
 

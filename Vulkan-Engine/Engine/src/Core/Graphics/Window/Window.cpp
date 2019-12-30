@@ -247,7 +247,7 @@ namespace Vulkan_Engine
 			//TODO: change this to give user options, or choose device with the best score
 			for (const auto& device : availableDevices) 
 			{
-				if (IsGraphicsVulkanCompatible(device)) 
+				if (IsGraphicsVulkanCompatible(device, m_WindowSurface)) 
 				{
 					m_PhysicalDevice = device;
 					break;
