@@ -90,10 +90,9 @@ namespace Vulkan_Engine
 			VkDebugUtilsMessengerEXT m_DebugCallbackMessenger;
 			VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 			VkDevice m_LogicalDevice;
-			VkQueue m_GraphicsQueueHandle; // used to retrieve queue handles
-			// ---------- windowing branch ----------  //
+			VkQueue m_GraphicsQueueHandle; // handle for graphics queue
+			VkQueue m_PresentQueueHandle; // handle for presentation queue
 			VkSurfaceKHR m_WindowSurface;// window surface (create directly after instance creation as can affect physical device)
-			
 		};
 	}
 }

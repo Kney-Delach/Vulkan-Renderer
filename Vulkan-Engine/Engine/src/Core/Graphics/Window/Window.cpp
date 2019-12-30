@@ -262,31 +262,38 @@ namespace Vulkan_Engine
 			}
 
 		}
+		
 
 		void Window::InitVulkanLogicalDevice()
 		{
 			// m_LogicalDevice
-			QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice);
+			QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice, m_WindowSurface);
 
-			// specify the queues to be created
-			VkDeviceQueueCreateInfo queueCreateInfo = {};
-			queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-			queueCreateInfo.queueFamilyIndex = indices.GraphicsFamily.value();
-			queueCreateInfo.queueCount = 1;
+			// specify the queues to be created (we require multiple of these to create a queue for each family)
+			std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
+			std::set<uint32_t> uniqueQueueFamilies = { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
 			static const float queuePriority = 1.0f;
-			queueCreateInfo.pQueuePriorities = &queuePriority;
-
+			for (uint32_t queueFamily : uniqueQueueFamilies) // for all family queues 
+			{
+				VkDeviceQueueCreateInfo queueCreateInfo = {};
+				queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+				queueCreateInfo.queueFamilyIndex = queueFamily;
+				queueCreateInfo.queueCount = 1;
+				queueCreateInfo.pQueuePriorities = &queuePriority;
+				queueCreateInfos.push_back(queueCreateInfo);
+			}
+			
 			// specify features of device being used
 			VkPhysicalDeviceFeatures deviceFeatures = {}; //TODO: Come back to this
 
 			// create the logical device info
 			VkDeviceCreateInfo createInfo = {};
 			createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-			createInfo.pQueueCreateInfos = &queueCreateInfo;
-			createInfo.queueCreateInfoCount = 1;
+			createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
+			createInfo.pQueueCreateInfos = queueCreateInfos.data();
 			createInfo.pEnabledFeatures = &deviceFeatures;
-			
 			createInfo.enabledExtensionCount = 0;
+
 			if (s_EnableValidationLayers) 
 			{
 				// enabled layer count and enabled layer names aren't used in new specs of vulkan (Set them for backwards compatibility)
@@ -306,6 +313,7 @@ namespace Vulkan_Engine
 				throw std::runtime_error(message);
 			}
 			vkGetDeviceQueue(m_LogicalDevice, indices.GraphicsFamily.value(), 0, &m_GraphicsQueueHandle);
+			vkGetDeviceQueue(m_LogicalDevice, indices.PresentFamily.value(), 0, &m_PresentQueueHandle);
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------
