@@ -19,6 +19,8 @@
 #include "Core/Events/ApplicationEvent.h"
 #include "Core/Graphics/Utility/VulkanUtility.h"
 
+const int MAX_FRAMES_IN_FLIGHT = 2; // number of frames that should be processed concurrently 
+
 namespace Vulkan_Engine
 {
 	namespace Graphics
@@ -41,9 +43,12 @@ namespace Vulkan_Engine
 		void Window::Cleanup()
 		{
 			vkDeviceWaitIdle(m_LogicalDevice); // wait for operations in a specific command queue to be finished 
-
-			vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphore, nullptr); // clean up render semaphore
-			vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphore, nullptr); // clean up image semaphore 
+			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+			{
+				vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphores[i], nullptr); // clean up render semaphore
+				vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphores[i], nullptr); // clean up image semaphore 
+				vkDestroyFence(m_LogicalDevice, m_InFlightFences[i], nullptr); // clean up fences 
+			}
 			vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr); // destroy the command pool 
 			for (auto framebuffer : m_SwapChainFramebuffers) 
 			{
@@ -150,7 +155,7 @@ namespace Vulkan_Engine
 			CreateCommandPool();
 			CreateCommandBuffers();
 			////////////////////
-			CreateSemaphores(); 
+			CreateSyncObjects(); 
 		}
 
 		void Window::CreateVulkanInstance()
@@ -274,6 +279,10 @@ namespace Vulkan_Engine
 			//TODO: change this to give user options, or choose device with the best score
 			for (const auto& device : availableDevices) 
 			{
+				// querying for device properties
+				VkPhysicalDeviceProperties properties; 
+				vkGetPhysicalDeviceProperties(device, &properties);
+				VK_CORE_INFO("Device Name: {0} ~ Maximum Color Attachments: {0}", properties.deviceName, properties.limits.maxColorAttachments);
 				if (IsGraphicsVulkanCompatible(device, m_WindowSurface)) 
 				{
 					m_PhysicalDevice = device;
@@ -903,44 +912,71 @@ namespace Vulkan_Engine
 
 		}
 
-		void Window::CreateSemaphores()
+		void Window::CreateSyncObjects()
 		{
+			m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+			m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+			m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+			m_ImagesInFlight.resize(m_SwapChainImages.size(), VK_NULL_HANDLE);
+			
 			VkSemaphoreCreateInfo semaphoreInfo = {};
 			semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-			if (vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphore) != VK_SUCCESS ||
-				vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphore) != VK_SUCCESS) 
+			VkFenceCreateInfo fenceInfo = {};
+			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // initialize fences in signaled state, as if initial frame render occured 
+
+			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
 			{
-				static const std::string message = "[GraphicsSystem::Window::CreateSemaphores]: Failed to create semaphores!";
-				VK_CORE_CRITICAL(message);
-				throw std::runtime_error(message);
-			}
+				if (vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
+					vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
+					vkCreateFence(m_LogicalDevice, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS)
+				{
+					static const std::string message = "[GraphicsSystem::Window::CreateSyncObjects]: Failed to create synchronization objects!";
+					VK_CORE_CRITICAL(message);
+					throw std::runtime_error(message);
+				}
+			}			
 		}
 		
 		void Window::RenderFrame()
 		{
+			vkWaitForFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+			
 			// 1. Acquire an image from the swap chain (Swap chain is extension feature)
 			uint32_t imageIndex; // final param in acquire function -> specifies index of swap chain image that has become available (VkImage) in m_SwapChainImages
 			// @timeout: time out in nanoseconds for an image to become available, using max disables the timeout
 			// @synch objects to be signaled when presentation engine is finished using the image.
-			vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+			vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+			
+			// Check if a previous frame is using this image (i.e. there is its fence to wait on)
+			if (m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE) 
+			{
+				vkWaitForFences(m_LogicalDevice, 1, &m_ImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+			}
+			// Mark the image as now being in use by this frame
+			m_ImagesInFlight[imageIndex] = m_InFlightFences[m_CurrentFrame];
+			
 			// 2. Execute the command buffer with that image as attachment in the framebuffer
 			// Queue submission and synchronization is configured through parameters in the VkSubmitInfo structure.
 			VkSubmitInfo submitInfo = {};
 			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			VkSemaphore waitSemaphores[] = { m_ImageAvailableSemaphore };
+			VkSemaphore waitSemaphores[] = { m_ImageAvailableSemaphores[m_CurrentFrame] };
 			VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }; //  which stages of the pipeline to wait 
 			submitInfo.waitSemaphoreCount = 1;
 			submitInfo.pWaitSemaphores = waitSemaphores;
 			submitInfo.pWaitDstStageMask = waitStages;
 			submitInfo.commandBufferCount = 1;
 			submitInfo.pCommandBuffers = &m_CommandBuffers[imageIndex]; // which command buffers to submit for execution
-			VkSemaphore signalSemaphores[] = { m_RenderFinishedSemaphore };
+			VkSemaphore signalSemaphores[] = { m_RenderFinishedSemaphores[m_CurrentFrame] };
 			// The signalSemaphoreCount and pSignalSemaphores parameters specify which semaphores to signal once the command buffer(s) have finished execution
 			submitInfo.signalSemaphoreCount = 1;
 			submitInfo.pSignalSemaphores = signalSemaphores;
+
+			vkResetFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame]); // reset the fences 
+
 			// optional fence signaled when command buffer completes execution 
-			if (vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+			if (vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS)
 			{
 				static const std::string message = "[GraphicsSystem::Window::RenderFrame]: Failed to submit draw command buffer!";
 				VK_CORE_CRITICAL(message);
@@ -960,6 +996,7 @@ namespace Vulkan_Engine
 
 			vkQueuePresentKHR(m_PresentQueueHandle, &presentInfo); // submits the request ot present an image to the swap chain 
 
+			m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT; // move onto the next frame 
 
 			// subpass dependencies
 			// We have only a single subpass right now, but the operations right beforeand right after this subpass also count as implicit "subpasses".

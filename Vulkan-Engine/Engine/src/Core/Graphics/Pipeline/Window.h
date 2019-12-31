@@ -89,7 +89,7 @@ namespace Vulkan_Engine
 			void CreateCommandPool();
 			void CreateCommandBuffers();
 			///////////////////////////////
-			void CreateSemaphores();
+			void CreateSyncObjects();
 			void RenderFrame();
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
@@ -115,10 +115,12 @@ namespace Vulkan_Engine
 			std::vector<VkFramebuffer> m_SwapChainFramebuffers;
 			VkCommandPool m_CommandPool;
 			std::vector<VkCommandBuffer> m_CommandBuffers;
-			////////////////////////////////////////////////
-			VkSemaphore m_ImageAvailableSemaphore; // signal image has been acquired & ready for rendering
-			VkSemaphore m_RenderFinishedSemaphore; // signal that rendering has finished & presentation can happen
-
+			//////////////////////////////////////////////// (each frame should have its own) 
+			std::vector<VkSemaphore> m_ImageAvailableSemaphores; // signal image has been acquired & ready for rendering
+			std::vector<VkSemaphore> m_RenderFinishedSemaphores; // signal that rendering has finished & presentation can happen
+			std::vector<VkFence> m_InFlightFences; // used for cpu <-> gpu synchronization
+			std::vector<VkFence> m_ImagesInFlight; // used to track for each swap chain image, if a frame in flight is currently using it
+			size_t m_CurrentFrame = 0; // frame index used to keep track of the current frame for correct semaphore usage
 		};
 	}
 }

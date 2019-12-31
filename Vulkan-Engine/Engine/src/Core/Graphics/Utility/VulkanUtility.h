@@ -155,8 +155,7 @@ namespace Vulkan_Engine
 			return requiredExtensions.empty();
 		}
 
-		// swap chain setup
-		
+		// swap chain setup		
 		struct SwapChainSupportDetails
 		{
 			VkSurfaceCapabilitiesKHR Capabilities; // min/max number of images in sc, min/max width / height of images 
@@ -175,7 +174,7 @@ namespace Vulkan_Engine
 		}
 
 		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device, VkSurfaceKHR& surface)
-		{
+		{			
 			const QueueFamilyIndices indices = FindQueueFamilies(device, surface);
 			const bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
