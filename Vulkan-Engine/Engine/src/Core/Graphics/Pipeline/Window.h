@@ -84,7 +84,13 @@ namespace Vulkan_Engine
 			void CreateVulkanSwapChain(); 
 			void CreateVulkanImageViews();
 			void CreateGraphicsRenderPass(); 
-			void CreateGraphicsPipeline(); 
+			void CreateGraphicsPipeline();
+			void CreateFramebuffers();
+			void CreateCommandPool();
+			void CreateCommandBuffers();
+			///////////////////////////////
+			void CreateSemaphores();
+			void RenderFrame();
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -106,6 +112,13 @@ namespace Vulkan_Engine
 			VkRenderPass m_RenderPass;
 			VkPipelineLayout m_PipelineLayout;
 			VkPipeline m_GraphicsPipeline;
+			std::vector<VkFramebuffer> m_SwapChainFramebuffers;
+			VkCommandPool m_CommandPool;
+			std::vector<VkCommandBuffer> m_CommandBuffers;
+			////////////////////////////////////////////////
+			VkSemaphore m_ImageAvailableSemaphore; // signal image has been acquired & ready for rendering
+			VkSemaphore m_RenderFinishedSemaphore; // signal that rendering has finished & presentation can happen
+
 		};
 	}
 }
