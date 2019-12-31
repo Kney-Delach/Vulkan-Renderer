@@ -83,6 +83,7 @@ namespace Vulkan_Engine
 			void InitVulkanLogicalDevice();
 			void CreateVulkanSwapChain(); 
 			void CreateVulkanImageViews();
+			void CreateGraphicsRenderPass(); 
 			void CreateGraphicsPipeline(); 
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
@@ -102,7 +103,9 @@ namespace Vulkan_Engine
 			std::vector<VkImageView> m_SwapChainImageViews; // describes how to access an image, and which part of the image to access.
 			VkFormat m_SwapChainImageFormat;
 			VkExtent2D m_SwapChainExtent;
+			VkRenderPass m_RenderPass;
 			VkPipelineLayout m_PipelineLayout;
+			VkPipeline m_GraphicsPipeline;
 		};
 	}
 }

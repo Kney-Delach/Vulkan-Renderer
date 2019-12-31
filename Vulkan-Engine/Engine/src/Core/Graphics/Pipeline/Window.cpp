@@ -39,7 +39,9 @@ namespace Vulkan_Engine
 
 		void Window::Cleanup()
 		{
+			vkDestroyPipeline(m_LogicalDevice, m_GraphicsPipeline, nullptr); // destroy the graphics pipeline 
 			vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr); // pipeline layout  (data passed to shaders)
+			vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr); // destroy the render pass 
 			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
 			{
 				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
@@ -132,6 +134,7 @@ namespace Vulkan_Engine
 			InitVulkanLogicalDevice();
 			CreateVulkanSwapChain();
 			CreateVulkanImageViews();
+			CreateGraphicsRenderPass();
 			CreateGraphicsPipeline();
 		}
 
@@ -434,6 +437,77 @@ namespace Vulkan_Engine
 			}
 		}
 
+		// tell Vulkan about the framebuffer attachments
+		// color and depth buffers there will be, how many samples to use for each of them and how their contents should be handled throughout the rendering operations
+		void Window::CreateGraphicsRenderPass()
+		{
+			////////////////////////////////////////////
+			// 1. Attachment Description
+			////////////////////////////////////////////
+			
+			// assign single color buffer attachment
+			VkAttachmentDescription colorAttachment = {};
+			colorAttachment.format = m_SwapChainImageFormat; // represented by 1 of the images in the swap chain 
+			colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; //TODO: Implement multisampling in the future
+			// determine what to do with the data in the attachment before rendering and after rendering
+			// Load Op:
+			// 1. VK_ATTACHMENT_LOAD_OP_LOAD: Preserve the existing contents of the attachment
+			// 2. VK_ATTACHMENT_LOAD_OP_CLEAR: Clear the values to a constant at the start
+			// 3. VK_ATTACHMENT_LOAD_OP_DONT_CARE : Existing contents are undefined; we don't care about them
+			colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // clear the framebuffer to black before drawing a new frame
+			// StoreOp
+			// 1. VK_ATTACHMENT_STORE_OP_STORE: Rendered contents will be stored in memory and can be read later
+			// 2. VK_ATTACHMENT_STORE_OP_DONT_CARE: Contents of the framebuffer will be undefined after the rendering operation
+			colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // store it, as want to render to screen
+			//TODO: In the future -> Stencil Buffer Attachment
+			// The loadOp and storeOp apply to color and depth data, and stencilLoadOp / stencilStoreOp apply to stencil data.
+			//  Our application won't do anything with the stencil buffer, so the results of loading and storing are irrelevant.
+
+			// Textures & Framebuffer pixels
+			//Note: images need to be transitioned to specific layouts that are suitable for the operation that they're going to be involved in next.
+			// VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: Images used as color attachment
+			// VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : Images to be presented in the swap chain
+			// VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL : Images to be used as destination for a memory copy operation
+			colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // (undefined = don't care) layout before render pass
+			colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // (ready for presentation) automatic transition to this layout post render pass
+
+			////////////////////////////////////////////
+			// 2. Subpasses & attachment references (currently single subpass) 
+			////////////////////////////////////////////
+			// A single render pass can consist of multiple subpasses.
+			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkAttachmentReference.html
+			VkAttachmentReference colorAttachmentRef = {};
+			colorAttachmentRef.attachment = 0; // which attachment (indexed)
+			colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			
+			VkSubpassDescription subpass = {};
+			subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // explicit as compute passes are possible 
+			subpass.colorAttachmentCount = 1; // index of the attachment in this array is directly referenced from the fragment shader with the layout(location = 0) out vec4 outColor directive!
+			subpass.pColorAttachments = &colorAttachmentRef;
+
+			// The following other types of attachments can be referenced by a subpass:
+			// 
+			// pInputAttachments: Attachments that are read from a shader
+			// pResolveAttachments : Attachments used for multisampling color attachments
+			// pDepthStencilAttachment : Attachment for depthand stencil data
+			// pPreserveAttachments : Attachments that are not used by this subpass, but for which the data must be preserved
+
+			// create the render pass 
+			VkRenderPassCreateInfo renderPassInfo = {};
+			renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+			renderPassInfo.attachmentCount = 1;
+			renderPassInfo.pAttachments = &colorAttachment;
+			renderPassInfo.subpassCount = 1;
+			renderPassInfo.pSubpasses = &subpass;
+
+			if (vkCreateRenderPass(m_LogicalDevice, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateGraphicsRenderPass]: Failed to create Render pass!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+		}
+
 		void Window::CreateGraphicsPipeline()
 		{
 			//TODO: Maybe something like this? Shader::SetActiveLogicalDevice(m_LogicalDevice); 
@@ -628,6 +702,39 @@ namespace Vulkan_Engine
 			if (vkCreatePipelineLayout(m_LogicalDevice, &pipelineLayoutInfo, nullptr, &m_PipelineLayout) != VK_SUCCESS) 
 			{
 				static const std::string message = "[GraphicsSystem::Window::CreateGraphicsPipeline]: Failed to create pipeline layout!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			////////////////////////////////////////////
+			// 10. Create the pipeline 
+			////////////////////////////////////////////
+			VkGraphicsPipelineCreateInfo pipelineInfo = {};
+			pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+			pipelineInfo.stageCount = 2;
+			pipelineInfo.pStages = shaderStages;
+			pipelineInfo.pVertexInputState = &vertexInputInfo;
+			pipelineInfo.pInputAssemblyState = &inputAssembly;
+			pipelineInfo.pViewportState = &viewportState;
+			pipelineInfo.pRasterizationState = &rasterizer;
+			pipelineInfo.pMultisampleState = &multisampling;
+			pipelineInfo.pDepthStencilState = nullptr; // Optional
+			pipelineInfo.pColorBlendState = &colorBlending;
+			pipelineInfo.pDynamicState = nullptr; // Optional
+			pipelineInfo.layout = m_PipelineLayout;
+			pipelineInfo.renderPass = m_RenderPass;
+			pipelineInfo.subpass = 0; // only running a single pass
+			// compatibility requirements below 
+			// https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#renderpass-compatibility
+			// These values are only used if the VK_PIPELINE_CREATE_DERIVATIVE_BIT flag is also specified in the flags field of VkGraphicsPipelineCreateInfo.
+			pipelineInfo.basePipelineHandle = VK_NULL_HANDLE; // Optional
+			pipelineInfo.basePipelineIndex = -1; // Optional
+
+			//todo: Notice definition and usages of pipeline cache, implement these in the future 
+			// A pipeline cache can be used to store and reuse data relevant to pipeline creation across multiple calls to vkCreateGraphicsPipelines and even across program executions if the cache is stored to a file.
+			if (vkCreateGraphicsPipelines(m_LogicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateGraphicsPipeline]: Failed to create pipeline pipeline!";
 				VK_CORE_CRITICAL(message);
 				throw std::runtime_error(message);
 			}
