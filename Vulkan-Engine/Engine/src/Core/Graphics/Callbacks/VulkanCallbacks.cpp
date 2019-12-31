@@ -2,7 +2,7 @@
 #include "VulkanCallbacks.h"
 #include "Core/Logger/Log.h"
 
-#include "Core/Graphics/Window/Window.h"
+#include "Core/Graphics/Pipeline/Window.h"
 
 namespace Vulkan_Engine
 {
