@@ -43,25 +43,22 @@ namespace Vulkan_Engine
 		void Window::Cleanup()
 		{
 			vkDeviceWaitIdle(m_LogicalDevice); // wait for operations in a specific command queue to be finished 
+
+			CleanupSwapChain();
+
+			vkDestroyBuffer(m_LogicalDevice, m_VertexBuffer, nullptr); // destroy the vertex buffer
+			vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr); // free the memory assigned to the buffer 
+
+			
 			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
 			{
 				vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphores[i], nullptr); // clean up render semaphore
 				vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphores[i], nullptr); // clean up image semaphore 
 				vkDestroyFence(m_LogicalDevice, m_InFlightFences[i], nullptr); // clean up fences 
 			}
+
 			vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr); // destroy the command pool 
-			for (auto framebuffer : m_SwapChainFramebuffers) 
-			{
-				vkDestroyFramebuffer(m_LogicalDevice, framebuffer, nullptr); // destroy the framebuffers
-			}
-			vkDestroyPipeline(m_LogicalDevice, m_GraphicsPipeline, nullptr); // destroy the graphics pipeline 
-			vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr); // pipeline layout  (data passed to shaders)
-			vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr); // destroy the render pass 
-			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
-			{
-				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
-			}
-			vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
+			
 			vkDestroyDevice(m_LogicalDevice, nullptr); // clean logical device 
 			if (s_EnableValidationLayers) 
 			{
@@ -103,7 +100,7 @@ namespace Vulkan_Engine
 		{
 			glfwInit();
 			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // no opengl context
-			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // because resizing is more complex			
+			
 			m_Window = glfwCreateWindow(m_WindowData.Properties.Width, m_WindowData.Properties.Height, m_WindowData.Properties.Title.c_str(), nullptr, nullptr);
 			VK_ASSERT(m_Window != nullptr, "GLFW Window Initialization failed!")
 			glfwSetWindowUserPointer(m_Window, &m_WindowData);
@@ -153,6 +150,7 @@ namespace Vulkan_Engine
 			CreateGraphicsPipeline();
 			CreateFramebuffers();
 			CreateCommandPool();
+			CreateVertexBuffer(); // vertex buffer creation 
 			CreateCommandBuffers();
 			////////////////////
 			CreateSyncObjects(); 
@@ -359,7 +357,7 @@ namespace Vulkan_Engine
 			const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(m_PhysicalDevice, m_WindowSurface);
 			const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.Formats);
 			const VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.PresentModes);
-			const VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities);
+			const VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities, m_Window);
 
 			// decide how many images to have in the swap chain
 			uint32_t imageCount = swapChainSupport.Capabilities.minImageCount + 1; // minimum number of images required for swap chain to function
@@ -381,7 +379,8 @@ namespace Vulkan_Engine
 			createInfo.imageArrayLayers = 1; // amount of layers each image consists of  (1 unless developing stereoscopic 3D)
 			// VK_IMAGE_USAGE_TRANSFER_DST_BIT  for post processing (for example) 
 			createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // ([currently -> color attachment] | depth attachment etc....) bit field: what kind of operations will use images in swap chain for
-
+			//createInfo.oldSwapchain = nullptr; // if creating a new swap chain whilst drawing commands on an image from the old one, we can reference the previous swap chain here.
+			
 			// specify how to handle swap chain images across multiple queue families
 			// draw on images from graphics queue, then submit using presentation queue
 			// 2 ways to handle images accessed from multiple queues:
@@ -545,15 +544,13 @@ namespace Vulkan_Engine
 				VK_CORE_CRITICAL(message);
 				throw std::runtime_error(message);
 			}
-
-
 		}
 
 		void Window::CreateGraphicsPipeline()
 		{
 			//TODO: Maybe something like this? Shader::SetActiveLogicalDevice(m_LogicalDevice); 
-			const Shader vertexShader("Resources/Shaders/Vert.spv", &m_LogicalDevice);
-			const Shader fragmentShader("Resources/Shaders/Frag.spv", &m_LogicalDevice);
+			const Shader vertexShader("../Resources/Shaders/SPV/Vert.spv", &m_LogicalDevice);
+			const Shader fragmentShader("../Resources/Shaders/SPV/Frag.spv", &m_LogicalDevice);
 
 			// create vertex shader info 
 			VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
@@ -578,14 +575,17 @@ namespace Vulkan_Engine
 			// 1. Vertex Input
 			////////////////////////////////////////////
 			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineVertexInputStateCreateInfo.html
+			//todo: this section should be abstracted along with the vertex abstraction
+			auto bindingDescription = Vertex::getBindingDescription();
+			auto attributeDescriptions = Vertex::getAttributeDescriptions();
 			VkPipelineVertexInputStateCreateInfo vertexInputInfo = {}; // format of the vertex data to pass to vertex shader 
 			vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 			// bindings: spacing between data and wheter data is per-vertex or per-instance
-			vertexInputInfo.vertexBindingDescriptionCount = 0; 
-			vertexInputInfo.pVertexBindingDescriptions = nullptr; // Point to array of structs that contain the descriptions of the data
-			// attributes: /type of attributes and which binding to load them from & at which offset 
-			vertexInputInfo.vertexAttributeDescriptionCount = 0;
-			vertexInputInfo.pVertexAttributeDescriptions = nullptr; // same as bindings descriptions 
+			vertexInputInfo.vertexBindingDescriptionCount = 1; 
+			vertexInputInfo.pVertexBindingDescriptions = &bindingDescription; // points to array of structs that contain the descriptions of the data
+			// attributes: type of attributes and which binding to load them from & at which offset 
+			vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());;
+			vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 			////////////////////////////////////////////
 			// 2. Input Assembly 
@@ -894,11 +894,17 @@ namespace Vulkan_Engine
 				// @ Param 2: graphics or compute pipeline? 
 				vkCmdBindPipeline(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline); // bind graphics pipeline
 
+				////////////////////////////////
+				//// Vertex buffer binding 
+				////////////////////////////////
 				// @Param: vertexCount: Even though we don't have a vertex buffer, we technically still have 3 vertices to draw.
 				// @Param: instanceCount : Used for instanced rendering, use 1 if you're not doing that.
 				// @Param: firstVertex : Used as an offset into the vertex buffer, defines the lowest value of gl_VertexIndex.
 				// @Param: firstInstance : Used as an offset for instanced rendering, defines the lowest value of gl_InstanceIndex.
-				vkCmdDraw(m_CommandBuffers[i], 3, 1, 0, 0); // draw a triangle
+				VkBuffer vertexBuffers[] = { m_VertexBuffer };
+				VkDeviceSize offsets[] = { 0 };
+				vkCmdBindVertexBuffers(m_CommandBuffers[i], 0, 1, vertexBuffers, offsets); // binds vertex buffer to bindings 
+				vkCmdDraw(m_CommandBuffers[i], static_cast<uint32_t>(m_Vertices.size()), 1, 0, 0);
 
 				// end the render pass 
 				vkCmdEndRenderPass(m_CommandBuffers[i]);
@@ -945,9 +951,21 @@ namespace Vulkan_Engine
 			
 			// 1. Acquire an image from the swap chain (Swap chain is extension feature)
 			uint32_t imageIndex; // final param in acquire function -> specifies index of swap chain image that has become available (VkImage) in m_SwapChainImages
+			
 			// @timeout: time out in nanoseconds for an image to become available, using max disables the timeout
 			// @synch objects to be signaled when presentation engine is finished using the image.
-			vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+			VkResult result = vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+			if (result == VK_ERROR_OUT_OF_DATE_KHR)
+			{
+				RecreateSwapChain();
+				return;
+			}
+			else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::RenderFrame]: Failed to aquire swap chain image!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
 			
 			// Check if a previous frame is using this image (i.e. there is its fence to wait on)
 			if (m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE) 
@@ -994,14 +1012,25 @@ namespace Vulkan_Engine
 			presentInfo.pImageIndices = &imageIndex; // index of the image for each swap chain 
 			presentInfo.pResults = nullptr; // can specify an array of VkResult values to check for every individual swap chain if presentation was successful
 
-			vkQueuePresentKHR(m_PresentQueueHandle, &presentInfo); // submits the request ot present an image to the swap chain 
+			result = vkQueuePresentKHR(m_PresentQueueHandle, &presentInfo); // submits the request ot present an image to the swap chain 
+
+			if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_WindowData.Properties.FramebufferResized) // recreate if out of date OR suboptimal
+			{
+				m_WindowData.Properties.FramebufferResized = false;
+				RecreateSwapChain();
+			}
+			else if (result != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::RenderFrame]: Failed to present swap chain image!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
 
 			m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT; // move onto the next frame 
 
 			// subpass dependencies
 			// We have only a single subpass right now, but the operations right beforeand right after this subpass also count as implicit "subpasses".
 			// There are two built-in dependencies that take care of the transition at the start of the render pass and at the end of the render pass, but the former does not occur at the right time. It assumes that the transition occurs at the start of the pipeline, but we haven't acquired the image yet at that point! There are two ways to deal with this problem. We could change the waitStages for the imageAvailableSemaphore to VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT to ensure that the render passes don't begin until the image is available, or we can make the render pass wait for the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage
-
 			
 			// Events are executed asynchronously, order of execution -> undefined...
 			// Need to synchronize swap chain events: fences & semaphores
@@ -1012,6 +1041,105 @@ namespace Vulkan_Engine
 			// Goal: Synchronize the queue operations of draw commands and presentation -> use semaphores
 		}
 
+		void Window::CleanupSwapChain()
+		{
+			for (auto framebuffer : m_SwapChainFramebuffers)
+			{
+				vkDestroyFramebuffer(m_LogicalDevice, framebuffer, nullptr); // destroy the framebuffers
+			}
+
+			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, static_cast<uint32_t>(m_CommandBuffers.size()), m_CommandBuffers.data());
+
+			vkDestroyPipeline(m_LogicalDevice, m_GraphicsPipeline, nullptr); // destroy the graphics pipeline 
+			vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr); // pipeline layout  (data passed to shaders)
+			vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr); // destroy the render pass 
+
+			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
+			{
+				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+			}
+			vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
+		}
+
+		void Window::RecreateSwapChain()
+		{
+			//TODO: change this temporary solution to a callback state 
+			int width = 0, height = 0;
+			glfwGetFramebufferSize(m_Window, &width, &height);
+			while (width == 0 || height == 0) 
+			{
+				glfwGetFramebufferSize(m_Window, &width, &height);
+				glfwWaitEvents();
+			}
+			vkDeviceWaitIdle(m_LogicalDevice); // in case resources are still in use 
+			CleanupSwapChain();
+			CreateVulkanSwapChain();
+			CreateVulkanImageViews(); // based on swap chain images 
+			CreateGraphicsRenderPass(); // depends on format of swap chain images (even though format may not change, should still be caught)
+			CreateGraphicsPipeline(); // viewport and scissor size  (Can be avoided by using dynamic state for viewports and scissor rectnagles)
+			CreateFramebuffers(); // depend on swap chain images
+			CreateCommandBuffers(); // depend on swap chain images 
+		}
+
+		void Window::CreateVertexBuffer()
+		{
+			VkBufferCreateInfo bufferInfo = {};
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = sizeof(m_Vertices[0]) * m_Vertices.size(); // total size of all Vertex data (bytes)
+			bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // for which purposes the data in buffer is used (multiple purposes possible)
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // owned by a specific queue family, or shared  (used by graphics queue here, so exclusive access)
+			bufferInfo.flags = 0; // configures sparse buffer memory, not used currently. 
+
+			if (vkCreateBuffer(m_LogicalDevice, &bufferInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateVertexBuffer]: Failed to create vertex buffer!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			////////////////////////////////////////////////////////////////
+			// Query buffer memory requirements
+			////////////////////////////////////////////////////////////////
+			// size: The size of the required amount of memory in bytes, may differ from bufferInfo.size.
+			// alignment : The offset in bytes where the buffer begins in the allocated region of memory, depends on bufferInfo.usage and bufferInfo.flags.
+			// memoryTypeBits : Bit field of the memory types that are suitable for the buffer.
+			VkMemoryRequirements memRequirements;
+			vkGetBufferMemoryRequirements(m_LogicalDevice, m_VertexBuffer, &memRequirements);
+
+			VkMemoryAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_PhysicalDevice);
+			if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateVertexBuffer]: Failed to allocate vertex buffer memory!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+			
+			// associate memory buffer memory with the buffer
+			//todo: Note: If the offset is non - zero, then it is required to be divisible by memRequirements.alignment.
+			vkBindBufferMemory(m_LogicalDevice, m_VertexBuffer, m_VertexBufferMemory, 0); // no offset as memory region allocated specifically for this vertex memory 
+
+			////////////////////////////////////////////////////////////////
+			// Filling the vertex buffer
+			////////////////////////////////////////////////////////////////
+			// https://en.wikipedia.org/wiki/Memory-mapped_I/O
+			void* data;
+			// VK_WHOLE_SIZE maps all of memory, rather than just bufferinfo.size
+			// the last parameter specifies the output for the pointer to the mapped memory 
+			vkMapMemory(m_LogicalDevice, m_VertexBufferMemory, 0, bufferInfo.size, 0, &data);
+
+			// can now memcpy the vertex data to the mapped memoryand unmap it again using vkUnmapMemory.
+			// Unfortunately the driver may not immediately copy the data into the buffer memory,
+			// for example because of caching.
+			// It is also possible that writes to the buffer are not visible in the mapped memory yet.
+			// There are two ways to deal with that problem : [USING @1 IN THE CURRENT IMPLEMENTATION]
+			// @1: Use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+			// @": Call vkFlushMappedMemoryRanges to after writing to the mapped memory, and call vkInvalidateMappedMemoryRanges before reading from the mapped memory
+			memcpy(data, m_Vertices.data(), (size_t)bufferInfo.size);
+			vkUnmapMemory(m_LogicalDevice, m_VertexBufferMemory);
+		}
 
 		// ------------------------------ GLFW Settings ------------------------------
 
@@ -1024,6 +1152,22 @@ namespace Vulkan_Engine
 				WindowClosedEvent event;
 				windowData.EventCallback(event);
 			});
+
+			glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
+			{
+				WindowData& windowData = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				windowData.Properties.Width = width;
+				windowData.Properties.Height = height;
+				WindowResizeEvent event(width, height);
+				windowData.EventCallback(event);
+			});
+
+			glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
+			{
+				WindowData& windowData = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				windowData.Properties.FramebufferResized = true;
+			});
+
 		}
 
 		void Window::SetGLFWConfigurations()

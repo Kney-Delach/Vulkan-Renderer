@@ -21,9 +21,11 @@
 #include "Core/Events/Event.h"
 
 #include "Shaders/Shader.h"
+#include "Shaders/Vertex.h"
 
 namespace Vulkan_Engine
 {
+	class WindowResizeEvent;
 	// forward declarations 
 	class Timestep; 
 
@@ -36,15 +38,17 @@ namespace Vulkan_Engine
 			std::string Title;
 			unsigned int Width;
 			unsigned int Height;
-
+			bool FramebufferResized; 			// Explicit handling of framebuffer resizing 
+			
 			WindowProperties(const std::string& title = "Vulkan-Engine", unsigned int width = 800, unsigned int height = 600)
-				: Title(title), Width(width), Height(height) {}
+				: Title(title), Width(width), Height(height), FramebufferResized(false) {}
 
 			WindowProperties(const WindowProperties& copy)
 			{
 				Title = copy.Title;
 				Width = copy.Width;
 				Height = copy.Height;
+				FramebufferResized = copy.FramebufferResized;
 			}
 		};
 
@@ -91,6 +95,15 @@ namespace Vulkan_Engine
 			///////////////////////////////
 			void CreateSyncObjects();
 			void RenderFrame();
+			///////////////////////////////
+			//// Everything that has to do with swap chain recreation
+			///////////////////////////////
+			void CleanupSwapChain();
+			void RecreateSwapChain();
+			///////////////////////////////
+			// Vertex buffer data
+			///////////////////////////////
+			void CreateVertexBuffer();  // does not depend on swap chain 
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -121,6 +134,18 @@ namespace Vulkan_Engine
 			std::vector<VkFence> m_InFlightFences; // used for cpu <-> gpu synchronization
 			std::vector<VkFence> m_ImagesInFlight; // used to track for each swap chain image, if a frame in flight is currently using it
 			size_t m_CurrentFrame = 0; // frame index used to keep track of the current frame for correct semaphore usage
+			//////////////////////////////////////////////////
+			//// Vertex buffer related variables
+			////TODO: Abstract this data as in Exalted.
+			//////////////////////////////////////////////////
+			inline static const std::vector<Vertex> m_Vertices = 
+			{
+				{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+				{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+				{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+			};
+			VkBuffer m_VertexBuffer; // does not depend on swap chain 
+			VkDeviceMemory m_VertexBufferMemory; // stores handle to buffer memory 
 		};
 	}
 }

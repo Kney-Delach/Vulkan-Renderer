@@ -34,6 +34,8 @@ namespace Vulkan_Engine
 	{
 		EventDispatcher dispatcher(e);
 		dispatcher.Dispatch<WindowClosedEvent>(VKE_BIND_EVENT_FN(Application::OnWindowClosed));
+		dispatcher.Dispatch<WindowResizeEvent>(VKE_BIND_EVENT_FN(Application::OnWindowResize));
+
 		//TODO: Implement layers to handle the rest of the events
 	}
 
@@ -86,5 +88,14 @@ namespace Vulkan_Engine
 		VK_CORE_TRACE("[Application]: Application::OnWindowClosed called with event: {0}", closedEvent.GetName());
 		m_Running = false;
 		return true;
+	}
+
+	bool Application::OnWindowResize(WindowResizeEvent& resizeEvent)
+	{
+		const unsigned width = resizeEvent.GetWidth();
+		const unsigned height = resizeEvent.GetHeight();
+		VK_CORE_INFO("[OnWindowResize]: {0} , {1}", width, height);
+		
+		return false;
 	}
 }

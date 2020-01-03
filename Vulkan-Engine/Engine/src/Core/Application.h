@@ -42,6 +42,7 @@ namespace Vulkan_Engine
 		VKE_RESULT Cleanup();
 	private:
 		bool OnWindowClosed(WindowClosedEvent& closedEvent);
+		bool OnWindowResize(WindowResizeEvent& resizeEvent);
 	private:
 		bool m_Running;
 		Timestep m_LastFrameTime;
