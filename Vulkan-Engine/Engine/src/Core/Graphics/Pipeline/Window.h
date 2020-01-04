@@ -106,6 +106,7 @@ namespace Vulkan_Engine
 			void CreateVertexBuffer();  // does not depend on swap chain
 			void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory); // abstracted buffer creation function 
 			void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+			void CreateIndexBuffer();
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -140,14 +141,28 @@ namespace Vulkan_Engine
 			//// Vertex buffer related variables
 			////TODO: Abstract this data as in Exalted.
 			//////////////////////////////////////////////////
-			inline static const std::vector<Vertex> m_Vertices = 
+			//inline static const std::vector<Vertex> m_TriangleVertices = 
+			//{
+			//	{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+			//	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+			//	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+			//};
+			// quad vertices using an index buffer 
+			const std::vector<Vertex> m_Vertices = 
 			{
-				{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-				{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-				{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+				{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+				{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+				{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+				{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
 			};
 			VkBuffer m_VertexBuffer; // does not depend on swap chain 
-			VkDeviceMemory m_VertexBufferMemory; // stores handle to buffer memory 
+			VkDeviceMemory m_VertexBufferMemory; // stores handle to buffer memory
+			const std::vector<uint16_t> m_Indices =
+			{
+				0, 1, 2, 2, 3, 0
+			};
+			VkBuffer m_IndexBuffer; // handle to index buffer 
+			VkDeviceMemory m_IndexBufferMemory;  // handle to index memory
 		};
 	}
 }

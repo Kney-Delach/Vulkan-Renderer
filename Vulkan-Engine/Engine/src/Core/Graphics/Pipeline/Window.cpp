@@ -46,6 +46,9 @@ namespace Vulkan_Engine
 
 			CleanupSwapChain();
 
+			vkDestroyBuffer(m_LogicalDevice, m_IndexBuffer, nullptr); // destroy index buffer
+			vkFreeMemory(m_LogicalDevice, m_IndexBufferMemory, nullptr); // free memory assigned to index buffer 
+			
 			vkDestroyBuffer(m_LogicalDevice, m_VertexBuffer, nullptr); // destroy the vertex buffer
 			vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr); // free the memory assigned to the buffer 
 
@@ -150,7 +153,8 @@ namespace Vulkan_Engine
 			CreateGraphicsPipeline();
 			CreateFramebuffers();
 			CreateCommandPool();
-			CreateVertexBuffer(); // vertex buffer creation 
+			CreateVertexBuffer(); // vertex buffer creation
+			CreateIndexBuffer(); // index buffer creation 
 			CreateCommandBuffers();
 			////////////////////
 			CreateSyncObjects(); 
@@ -903,9 +907,14 @@ namespace Vulkan_Engine
 				// @Param: firstInstance : Used as an offset for instanced rendering, defines the lowest value of gl_InstanceIndex.
 				VkBuffer vertexBuffers[] = { m_VertexBuffer };
 				VkDeviceSize offsets[] = { 0 };
-				vkCmdBindVertexBuffers(m_CommandBuffers[i], 0, 1, vertexBuffers, offsets); // binds vertex buffer to bindings 
-				vkCmdDraw(m_CommandBuffers[i], static_cast<uint32_t>(m_Vertices.size()), 1, 0, 0);
+				vkCmdBindVertexBuffers(m_CommandBuffers[i], 0, 1, vertexBuffers, offsets); // binds vertex buffer to bindings
+				vkCmdBindIndexBuffer(m_CommandBuffers[i], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16); 
 
+				// This draws primitive vertices 
+				//vkCmdDraw(m_CommandBuffers[i], static_cast<uint32_t>(m_Vertices.size()), 1, 0, 0); 
+
+				vkCmdDrawIndexed(m_CommandBuffers[i], static_cast<uint32_t>(m_Indices.size()), 1, 0, 0, 0);
+				
 				// end the render pass 
 				vkCmdEndRenderPass(m_CommandBuffers[i]);
 				if (vkEndCommandBuffer(m_CommandBuffers[i]) != VK_SUCCESS) 
@@ -1228,6 +1237,27 @@ namespace Vulkan_Engine
 
 			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer); // clean command buffer
 
+		}
+
+		void Window::CreateIndexBuffer()
+		{
+			const VkDeviceSize bufferSize = sizeof(m_Indices[0]) * m_Indices.size();
+
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			void* data;
+			vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+			memcpy(data, m_Indices.data(), (size_t)bufferSize);
+			vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
+
+			CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
+
+			vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+			vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------
