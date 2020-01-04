@@ -19,6 +19,12 @@
 #include "Core/Events/ApplicationEvent.h"
 #include "Core/Graphics/Utility/VulkanUtility.h"
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+#include <chrono>
+
 const int MAX_FRAMES_IN_FLIGHT = 2; // number of frames that should be processed concurrently 
 
 namespace Vulkan_Engine
@@ -37,31 +43,27 @@ namespace Vulkan_Engine
 		void Window::OnUpdate(const Timestep deltaTime)
 		{
 			glfwPollEvents();
-			RenderFrame(); 
+			RenderFrame(deltaTime); 
 		}
 
 		void Window::Cleanup()
 		{
-			vkDeviceWaitIdle(m_LogicalDevice); // wait for operations in a specific command queue to be finished 
-
+			vkDeviceWaitIdle(m_LogicalDevice); // wait for operations in a specific command queue to be finished
+			
 			CleanupSwapChain();
-
+			
+			vkDestroyDescriptorSetLayout(m_LogicalDevice, m_DescriptorSetLayout, nullptr); // clean up descriptor binding sets
 			vkDestroyBuffer(m_LogicalDevice, m_IndexBuffer, nullptr); // destroy index buffer
 			vkFreeMemory(m_LogicalDevice, m_IndexBufferMemory, nullptr); // free memory assigned to index buffer 
-			
 			vkDestroyBuffer(m_LogicalDevice, m_VertexBuffer, nullptr); // destroy the vertex buffer
-			vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr); // free the memory assigned to the buffer 
-
-			
+			vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr); // free the memory assigned to the buffer 			
 			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
 			{
 				vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphores[i], nullptr); // clean up render semaphore
 				vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphores[i], nullptr); // clean up image semaphore 
 				vkDestroyFence(m_LogicalDevice, m_InFlightFences[i], nullptr); // clean up fences 
 			}
-
-			vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr); // destroy the command pool 
-			
+			vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr); // destroy the command pool 			
 			vkDestroyDevice(m_LogicalDevice, nullptr); // clean logical device 
 			if (s_EnableValidationLayers) 
 			{
@@ -150,11 +152,15 @@ namespace Vulkan_Engine
 			CreateVulkanSwapChain();
 			CreateVulkanImageViews();
 			CreateGraphicsRenderPass();
+			CreateDescriptorSetLayout(); // create descriptor set layouts 
 			CreateGraphicsPipeline();
 			CreateFramebuffers();
 			CreateCommandPool();
 			CreateVertexBuffer(); // vertex buffer creation
-			CreateIndexBuffer(); // index buffer creation 
+			CreateIndexBuffer(); // index buffer creation
+			CreateUniformBuffers(); // uniform buffer creation
+			CreateDescriptorPool();
+			CreateDescriptorSets();
 			CreateCommandBuffers();
 			////////////////////
 			CreateSyncObjects(); 
@@ -205,7 +211,6 @@ namespace Vulkan_Engine
 			{
 				createInfo.enabledLayerCount = 0;
 				createInfo.pNext = nullptr;
-
 			}
 			
 			// Creates the vulkan instance 
@@ -644,7 +649,7 @@ namespace Vulkan_Engine
 			rasterizer.polygonMode = VK_POLYGON_MODE_FILL; // determines how fragm,ents are generated for geometry (FILL / LINE / POINT) -> any other mode than fill require gpu feature
 			rasterizer.lineWidth = 1.0f; // thickness of lines (number of fragments) (if > 1.0, requires wideLines GPU feature)
 			rasterizer.cullMode = VK_CULL_MODE_BACK_BIT; // type of face culling 
-			rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // vertex ordering
+			rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // vertex ordering [VK_FRONT_FACE_CLOCKWISE]
 			// alters depth values by adding constants / biasing based on fragment's slope (USAGE:Shadow mapping)
 			rasterizer.depthBiasEnable = VK_FALSE;
 			rasterizer.depthBiasConstantFactor = 0.0f; // Optional
@@ -739,8 +744,8 @@ namespace Vulkan_Engine
 			// Push Constants: ways to pass dynamic data to shaders
 			VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
 			pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-			pipelineLayoutInfo.setLayoutCount = 0; // Optional
-			pipelineLayoutInfo.pSetLayouts = nullptr; // Optional
+			pipelineLayoutInfo.setLayoutCount = 1; // Optional
+			pipelineLayoutInfo.pSetLayouts = &m_DescriptorSetLayout; // descriptor layouts set (TODO: Return for desc pools / sets)
 			pipelineLayoutInfo.pushConstantRangeCount = 0; // Optional
 			pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
 
@@ -908,6 +913,7 @@ namespace Vulkan_Engine
 				VkBuffer vertexBuffers[] = { m_VertexBuffer };
 				VkDeviceSize offsets[] = { 0 };
 				vkCmdBindVertexBuffers(m_CommandBuffers[i], 0, 1, vertexBuffers, offsets); // binds vertex buffer to bindings
+				vkCmdBindDescriptorSets(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[i], 0, nullptr);
 				vkCmdBindIndexBuffer(m_CommandBuffers[i], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16); 
 
 				// This draws primitive vertices 
@@ -954,7 +960,7 @@ namespace Vulkan_Engine
 			}			
 		}
 		
-		void Window::RenderFrame()
+		void Window::RenderFrame(const Timestep deltaTime)
 		{
 			vkWaitForFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
 			
@@ -983,6 +989,8 @@ namespace Vulkan_Engine
 			}
 			// Mark the image as now being in use by this frame
 			m_ImagesInFlight[imageIndex] = m_InFlightFences[m_CurrentFrame];
+
+			UpdateUniformBuffer(imageIndex, deltaTime); //todo: This obviously shouldn't stay here...
 			
 			// 2. Execute the command buffer with that image as attachment in the framebuffer
 			// Queue submission and synchronization is configured through parameters in the VkSubmitInfo structure.
@@ -1056,18 +1064,21 @@ namespace Vulkan_Engine
 			{
 				vkDestroyFramebuffer(m_LogicalDevice, framebuffer, nullptr); // destroy the framebuffers
 			}
-
 			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, static_cast<uint32_t>(m_CommandBuffers.size()), m_CommandBuffers.data());
-
 			vkDestroyPipeline(m_LogicalDevice, m_GraphicsPipeline, nullptr); // destroy the graphics pipeline 
 			vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr); // pipeline layout  (data passed to shaders)
 			vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr); // destroy the render pass 
-
 			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
 			{
 				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
 			}
 			vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
+			for (size_t i = 0; i < m_SwapChainImages.size(); i++) // cleanup uniform buffers 
+			{
+				vkDestroyBuffer(m_LogicalDevice, m_UniformBuffers[i], nullptr); 
+				vkFreeMemory(m_LogicalDevice, m_UniformBuffersMemory[i], nullptr);
+			}
+			vkDestroyDescriptorPool(m_LogicalDevice, m_DescriptorPool, nullptr);
 		}
 
 		void Window::RecreateSwapChain()
@@ -1087,6 +1098,9 @@ namespace Vulkan_Engine
 			CreateGraphicsRenderPass(); // depends on format of swap chain images (even though format may not change, should still be caught)
 			CreateGraphicsPipeline(); // viewport and scissor size  (Can be avoided by using dynamic state for viewports and scissor rectnagles)
 			CreateFramebuffers(); // depend on swap chain images
+			CreateUniformBuffers();  // uniform buffer recreation (as depend on number of swap chain images)
+			CreateDescriptorPool();
+			CreateDescriptorSets(); 
 			CreateCommandBuffers(); // depend on swap chain images 
 		}
 
@@ -1258,6 +1272,121 @@ namespace Vulkan_Engine
 
 			vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
 			vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+		}
+
+		void Window::CreateDescriptorSetLayout()
+		{
+			VkDescriptorSetLayoutBinding uboLayoutBinding = {}; // used to describe every binding 
+			uboLayoutBinding.binding = 0; // location of binding 
+			uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // binding a uniform buffer 
+			uboLayoutBinding.descriptorCount = 1; // specifies number descriptor types in this binding (can contain multiple)
+			uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // where in the pipeline is the descriptor being used (VK_SHADER_STAGE_ALL_GRAPHICS)
+			uboLayoutBinding.pImmutableSamplers = nullptr; //TODO: this is to do with image sampling 
+
+			VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+			layoutInfo.bindingCount = 1;
+			layoutInfo.pBindings = &uboLayoutBinding;
+
+			if (vkCreateDescriptorSetLayout(m_LogicalDevice, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreataDescriptorSetLayout]: Failed to create descriptor set layout!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+		}
+
+		void Window::CreateUniformBuffers()
+		{
+			const VkDeviceSize bufferSize = sizeof(UniformBuffer);
+			
+			m_UniformBuffers.resize(m_SwapChainImages.size());
+			m_UniformBuffersMemory.resize(m_SwapChainImages.size());
+
+			for (size_t i = 0; i < m_SwapChainImages.size(); i++) 
+			{
+				CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_UniformBuffers[i], m_UniformBuffersMemory[i]);
+			}
+		}
+
+		void Window::CreateDescriptorPool()
+		{
+			// define which descriptor types our sets contain & how many of them
+			VkDescriptorPoolSize poolSize = {};
+			poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			poolSize.descriptorCount = static_cast<uint32_t>(m_SwapChainImages.size());
+
+			// references the pool size 
+			VkDescriptorPoolCreateInfo poolInfo = {};
+			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+			poolInfo.poolSizeCount = 1;
+			poolInfo.pPoolSizes = &poolSize;
+			poolInfo.maxSets = static_cast<uint32_t>(m_SwapChainImages.size());; // max number of sets to be allocated
+
+			if (vkCreateDescriptorPool(m_LogicalDevice, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS)
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreataDescriptorSetLayout]: Failed to create descriptor pool!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+		}
+
+		void Window::CreateDescriptorSets()
+		{
+			std::vector<VkDescriptorSetLayout> layouts(m_SwapChainImages.size(), m_DescriptorSetLayout); // set of descriptor layouts 
+			VkDescriptorSetAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+			allocInfo.descriptorPool = m_DescriptorPool;
+			allocInfo.descriptorSetCount = static_cast<uint32_t>(m_SwapChainImages.size());
+			allocInfo.pSetLayouts = layouts.data();
+
+			m_DescriptorSets.resize(m_SwapChainImages.size());
+			if (vkAllocateDescriptorSets(m_LogicalDevice, &allocInfo, m_DescriptorSets.data()) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreataDescriptorSetLayout]: Failed to allocate descriptor set!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			// populate every descriptor in pool created above
+			for (size_t i = 0; i < m_SwapChainImages.size(); i++) 
+			{
+				VkDescriptorBufferInfo bufferInfo = {};
+				bufferInfo.buffer = m_UniformBuffers[i];
+				bufferInfo.offset = 0;
+				bufferInfo.range = sizeof(UniformBuffer);
+
+				VkWriteDescriptorSet descriptorWrite = {};
+				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrite.dstSet = m_DescriptorSets[i]; // set to update
+				descriptorWrite.dstBinding = 0; // destination binding of set 
+				descriptorWrite.dstArrayElement = 0; // at which index to start from 
+				descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; 
+				descriptorWrite.descriptorCount = 1; // how many array elements to update
+				descriptorWrite.pBufferInfo = &bufferInfo; // buffer data
+				descriptorWrite.pImageInfo = nullptr; // image data
+				descriptorWrite.pTexelBufferView = nullptr; // buffer views
+				vkUpdateDescriptorSets(m_LogicalDevice, 1, &descriptorWrite, 0, nullptr);
+			}
+		}
+
+		void Window::UpdateUniformBuffer(uint32_t imageIndex, const Timestep deltaTime)
+		{
+			static auto startTime = std::chrono::high_resolution_clock::now();
+
+			const auto currentTime = std::chrono::high_resolution_clock::now();
+			const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+			
+			UniformBuffer ubo = {};
+			ubo.Model = glm::rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+			ubo.View = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+			ubo.Projection = glm::perspective(glm::radians(45.0f), float(m_WindowData.Properties.Width) / float(m_WindowData.Properties.Height), 0.1f, 10.0f);
+			ubo.Projection[1][1] *= -1;
+
+			void* data;
+			vkMapMemory(m_LogicalDevice, m_UniformBuffersMemory[imageIndex], 0, sizeof(ubo), 0, &data);
+			memcpy(data, &ubo, sizeof(ubo));
+			vkUnmapMemory(m_LogicalDevice, m_UniformBuffersMemory[imageIndex]);
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------

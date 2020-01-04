@@ -22,6 +22,7 @@
 
 #include "Shaders/Shader.h"
 #include "Shaders/Vertex.h"
+#include "Shaders/UniformBuffer.h"
 
 namespace Vulkan_Engine
 {
@@ -94,7 +95,7 @@ namespace Vulkan_Engine
 			void CreateCommandBuffers();
 			///////////////////////////////
 			void CreateSyncObjects();
-			void RenderFrame();
+			void RenderFrame(const Timestep deltaTime);
 			///////////////////////////////
 			//// Everything that has to do with swap chain recreation
 			///////////////////////////////
@@ -107,6 +108,14 @@ namespace Vulkan_Engine
 			void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory); // abstracted buffer creation function 
 			void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 			void CreateIndexBuffer();
+			///////////////////////////////
+			// Descriptor layouts (uniform buffers)
+			///////////////////////////////
+			void CreateDescriptorSetLayout();
+			void CreateUniformBuffers();
+			void CreateDescriptorPool();
+			void CreateDescriptorSets();
+			void UpdateUniformBuffer(uint32_t imageIndex, const Timestep deltaTime);
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -126,6 +135,7 @@ namespace Vulkan_Engine
 			VkFormat m_SwapChainImageFormat;
 			VkExtent2D m_SwapChainExtent;
 			VkRenderPass m_RenderPass;
+			VkDescriptorSetLayout m_DescriptorSetLayout; // descriptor set layout (combines all descriptor bindings)
 			VkPipelineLayout m_PipelineLayout;
 			VkPipeline m_GraphicsPipeline;
 			std::vector<VkFramebuffer> m_SwapChainFramebuffers;
@@ -163,6 +173,10 @@ namespace Vulkan_Engine
 			};
 			VkBuffer m_IndexBuffer; // handle to index buffer 
 			VkDeviceMemory m_IndexBufferMemory;  // handle to index memory
+			std::vector<VkBuffer> m_UniformBuffers;
+			std::vector<VkDeviceMemory> m_UniformBuffersMemory;
+			VkDescriptorPool m_DescriptorPool;
+			std::vector<VkDescriptorSet> m_DescriptorSets;
 		};
 	}
 }
