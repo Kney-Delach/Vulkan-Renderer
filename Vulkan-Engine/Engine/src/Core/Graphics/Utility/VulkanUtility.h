@@ -11,6 +11,8 @@
 
 #include "Core/Graphics/Callbacks/VulkanCallbacks.h"
 
+#include <GLFW/glfw3.h> // for GLFWindow
+
 namespace Vulkan_Engine
 {
 	namespace Graphics
@@ -155,8 +157,7 @@ namespace Vulkan_Engine
 			return requiredExtensions.empty();
 		}
 
-		// swap chain setup
-		
+		// swap chain setup		
 		struct SwapChainSupportDetails
 		{
 			VkSurfaceCapabilitiesKHR Capabilities; // min/max number of images in sc, min/max width / height of images 
@@ -175,7 +176,7 @@ namespace Vulkan_Engine
 		}
 
 		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device, VkSurfaceKHR& surface)
-		{
+		{			
 			const QueueFamilyIndices indices = FindQueueFamilies(device, surface);
 			const bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
@@ -236,7 +237,7 @@ namespace Vulkan_Engine
 		//////////////////////////////////////////////////
 		//// Swap Extent
 		//////////////////////////////////////////////////
-		VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities)
+		VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities, GLFWwindow* activeWindow)
 		{
 			if (capabilities.currentExtent.width != UINT32_MAX) 
 			{
@@ -244,12 +245,39 @@ namespace Vulkan_Engine
 			}
 			else 
 			{
-				//TODO: Access width and height from window data directly.
-				VkExtent2D actualExtent = { 800, 600 }; 
+				int width, height;
+				glfwGetFramebufferSize(activeWindow, &width, &height);
+				
+				VkExtent2D actualExtent = { static_cast<uint32_t>(width), static_cast<uint32_t>(height)}; //TODO: Abstract this process into getting data from the callback . 
 				actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
 				actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
 				return actualExtent;
 			}
+		}
+		
+		//////////////////////////////////////////////////
+		// vertex buffer related functions
+		//////////////////////////////////////////////////
+		// Memory heaps are distinct memory resources like dedicated VRAM and swap space in RAM for when VRAM runs out.
+		// The different types of memory exist within these heaps.
+		// Right now we'll only concern ourselves with the type of memory and not the heap it comes from,
+		// but you can imagine that this can affect performance.
+		// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPhysicalDeviceMemoryProperties.html
+		// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkMemoryType.html
+		uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties, VkPhysicalDevice& physicalDevice)
+		{
+			VkPhysicalDeviceMemoryProperties memProperties; // memory types & memory heaps arrays
+			vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memProperties);
+			// specify bit field of memory types that are suitable (iterate over them, check if bit is set to 1)
+			// as well as check for compatible properties 
+			for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) 
+			{
+				if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) // bitwise AND 
+				{
+					return i;
+				}
+			}
+			throw std::runtime_error("Failed to find suitable memory type!");
 		}
 		
 	}

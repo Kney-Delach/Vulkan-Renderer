@@ -19,6 +19,8 @@
 #include "Core/Events/ApplicationEvent.h"
 #include "Core/Graphics/Utility/VulkanUtility.h"
 
+const int MAX_FRAMES_IN_FLIGHT = 2; // number of frames that should be processed concurrently 
+
 namespace Vulkan_Engine
 {
 	namespace Graphics
@@ -35,18 +37,31 @@ namespace Vulkan_Engine
 		void Window::OnUpdate(const Timestep deltaTime)
 		{
 			glfwPollEvents();
+			RenderFrame(); 
 		}
 
 		void Window::Cleanup()
 		{
-			vkDestroyPipeline(m_LogicalDevice, m_GraphicsPipeline, nullptr); // destroy the graphics pipeline 
-			vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr); // pipeline layout  (data passed to shaders)
-			vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr); // destroy the render pass 
-			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
+			vkDeviceWaitIdle(m_LogicalDevice); // wait for operations in a specific command queue to be finished 
+
+			CleanupSwapChain();
+
+			vkDestroyBuffer(m_LogicalDevice, m_IndexBuffer, nullptr); // destroy index buffer
+			vkFreeMemory(m_LogicalDevice, m_IndexBufferMemory, nullptr); // free memory assigned to index buffer 
+			
+			vkDestroyBuffer(m_LogicalDevice, m_VertexBuffer, nullptr); // destroy the vertex buffer
+			vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr); // free the memory assigned to the buffer 
+
+			
+			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
 			{
-				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+				vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphores[i], nullptr); // clean up render semaphore
+				vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphores[i], nullptr); // clean up image semaphore 
+				vkDestroyFence(m_LogicalDevice, m_InFlightFences[i], nullptr); // clean up fences 
 			}
-			vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
+
+			vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr); // destroy the command pool 
+			
 			vkDestroyDevice(m_LogicalDevice, nullptr); // clean logical device 
 			if (s_EnableValidationLayers) 
 			{
@@ -88,7 +103,7 @@ namespace Vulkan_Engine
 		{
 			glfwInit();
 			glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API); // no opengl context
-			glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE); // because resizing is more complex			
+			
 			m_Window = glfwCreateWindow(m_WindowData.Properties.Width, m_WindowData.Properties.Height, m_WindowData.Properties.Title.c_str(), nullptr, nullptr);
 			VK_ASSERT(m_Window != nullptr, "GLFW Window Initialization failed!")
 			glfwSetWindowUserPointer(m_Window, &m_WindowData);
@@ -136,6 +151,13 @@ namespace Vulkan_Engine
 			CreateVulkanImageViews();
 			CreateGraphicsRenderPass();
 			CreateGraphicsPipeline();
+			CreateFramebuffers();
+			CreateCommandPool();
+			CreateVertexBuffer(); // vertex buffer creation
+			CreateIndexBuffer(); // index buffer creation 
+			CreateCommandBuffers();
+			////////////////////
+			CreateSyncObjects(); 
 		}
 
 		void Window::CreateVulkanInstance()
@@ -259,6 +281,10 @@ namespace Vulkan_Engine
 			//TODO: change this to give user options, or choose device with the best score
 			for (const auto& device : availableDevices) 
 			{
+				// querying for device properties
+				VkPhysicalDeviceProperties properties; 
+				vkGetPhysicalDeviceProperties(device, &properties);
+				VK_CORE_INFO("Device Name: {0} ~ Maximum Color Attachments: {0}", properties.deviceName, properties.limits.maxColorAttachments);
 				if (IsGraphicsVulkanCompatible(device, m_WindowSurface)) 
 				{
 					m_PhysicalDevice = device;
@@ -335,7 +361,7 @@ namespace Vulkan_Engine
 			const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(m_PhysicalDevice, m_WindowSurface);
 			const VkSurfaceFormatKHR surfaceFormat = ChooseSwapSurfaceFormat(swapChainSupport.Formats);
 			const VkPresentModeKHR presentMode = ChooseSwapPresentMode(swapChainSupport.PresentModes);
-			const VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities);
+			const VkExtent2D extent = ChooseSwapExtent(swapChainSupport.Capabilities, m_Window);
 
 			// decide how many images to have in the swap chain
 			uint32_t imageCount = swapChainSupport.Capabilities.minImageCount + 1; // minimum number of images required for swap chain to function
@@ -357,7 +383,8 @@ namespace Vulkan_Engine
 			createInfo.imageArrayLayers = 1; // amount of layers each image consists of  (1 unless developing stereoscopic 3D)
 			// VK_IMAGE_USAGE_TRANSFER_DST_BIT  for post processing (for example) 
 			createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT; // ([currently -> color attachment] | depth attachment etc....) bit field: what kind of operations will use images in swap chain for
-
+			//createInfo.oldSwapchain = nullptr; // if creating a new swap chain whilst drawing commands on an image from the old one, we can reference the previous swap chain here.
+			
 			// specify how to handle swap chain images across multiple queue families
 			// draw on images from graphics queue, then submit using presentation queue
 			// 2 ways to handle images accessed from multiple queues:
@@ -500,6 +527,21 @@ namespace Vulkan_Engine
 			renderPassInfo.subpassCount = 1;
 			renderPassInfo.pSubpasses = &subpass;
 
+			VkSubpassDependency dependency = {};
+			dependency.srcSubpass = VK_SUBPASS_EXTERNAL; // indices of dependency  (external -> implciit subpass before (or after in dstSubpass) render pass)
+			dependency.dstSubpass = 0; // index 0 is the subpass created above, which is the only existing subpass currently (must always be higher than srcSubpass to prevent cycles in dependency graphh)
+			// operations to wait on & stages in which these operations occur 
+			dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependency.srcAccessMask = 0;
+			dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+			dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // wait on reading writing of color attachments 
+
+			// These settings will prevent the transition from happening until it's actually necessary (and allowed): when we want to start writing colors to it.
+
+			// update render pass info 
+			renderPassInfo.dependencyCount = 1;
+			renderPassInfo.pDependencies = &dependency;
+			
 			if (vkCreateRenderPass(m_LogicalDevice, &renderPassInfo, nullptr, &m_RenderPass) != VK_SUCCESS) 
 			{
 				static const std::string message = "[GraphicsSystem::Window::CreateGraphicsRenderPass]: Failed to create Render pass!";
@@ -511,8 +553,8 @@ namespace Vulkan_Engine
 		void Window::CreateGraphicsPipeline()
 		{
 			//TODO: Maybe something like this? Shader::SetActiveLogicalDevice(m_LogicalDevice); 
-			const Shader vertexShader("Resources/Shaders/Vert.spv", &m_LogicalDevice);
-			const Shader fragmentShader("Resources/Shaders/Frag.spv", &m_LogicalDevice);
+			const Shader vertexShader("../Resources/Shaders/SPV/Vert.spv", &m_LogicalDevice);
+			const Shader fragmentShader("../Resources/Shaders/SPV/Frag.spv", &m_LogicalDevice);
 
 			// create vertex shader info 
 			VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
@@ -537,14 +579,17 @@ namespace Vulkan_Engine
 			// 1. Vertex Input
 			////////////////////////////////////////////
 			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineVertexInputStateCreateInfo.html
+			//todo: this section should be abstracted along with the vertex abstraction
+			auto bindingDescription = Vertex::getBindingDescription();
+			auto attributeDescriptions = Vertex::getAttributeDescriptions();
 			VkPipelineVertexInputStateCreateInfo vertexInputInfo = {}; // format of the vertex data to pass to vertex shader 
 			vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 			// bindings: spacing between data and wheter data is per-vertex or per-instance
-			vertexInputInfo.vertexBindingDescriptionCount = 0; 
-			vertexInputInfo.pVertexBindingDescriptions = nullptr; // Point to array of structs that contain the descriptions of the data
-			// attributes: /type of attributes and which binding to load them from & at which offset 
-			vertexInputInfo.vertexAttributeDescriptionCount = 0;
-			vertexInputInfo.pVertexAttributeDescriptions = nullptr; // same as bindings descriptions 
+			vertexInputInfo.vertexBindingDescriptionCount = 1; 
+			vertexInputInfo.pVertexBindingDescriptions = &bindingDescription; // points to array of structs that contain the descriptions of the data
+			// attributes: type of attributes and which binding to load them from & at which offset 
+			vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());;
+			vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 
 			////////////////////////////////////////////
 			// 2. Input Assembly 
@@ -740,6 +785,481 @@ namespace Vulkan_Engine
 			}
 		}
 
+		void Window::CreateFramebuffers()
+		{
+			m_SwapChainFramebuffers.resize(m_SwapChainImageViews.size());
+			// create a framebuffer for each image view
+			for (size_t i = 0; i < m_SwapChainImageViews.size(); i++) 
+			{
+				VkImageView attachments[] = { m_SwapChainImageViews[i] };
+
+				VkFramebufferCreateInfo framebufferInfo = {};
+				framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+				framebufferInfo.renderPass = m_RenderPass; // must use same number & types of attachments 
+				framebufferInfo.attachmentCount = 1;
+				framebufferInfo.pAttachments = attachments; // VkImageView that should be bound 
+				framebufferInfo.width = m_SwapChainExtent.width;
+				framebufferInfo.height = m_SwapChainExtent.height;
+				framebufferInfo.layers = 1; // number of layers in the image arrays 
+
+				if (vkCreateFramebuffer(m_LogicalDevice, &framebufferInfo, nullptr, &m_SwapChainFramebuffers[i]) != VK_SUCCESS) 
+				{
+					static const std::string message = "[GraphicsSystem::Window::CreateFramebuffers]: Failed to create framebuffer!";
+					VK_CORE_CRITICAL(message);
+					throw std::runtime_error(message);
+				}
+			}
+		}
+
+		void Window::CreateCommandPool()
+		{
+			// Command buffers are executed by submitting them on one of the device queues,
+			// like the graphics and presentation queues we retrieved.
+			// Each command pool can only allocate command buffers that are submitted on a single type of queue
+			QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice, m_WindowSurface);
+			VkCommandPoolCreateInfo poolInfo = {};
+			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			poolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value(); // graphics family -> as recording commands for drawing 
+			// VK_COMMAND_POOL_CREATE_TRANSIENT_BIT				: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
+			// VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT	: Allow command buffers to be rerecorded individually, without this flag they all have to be reset together
+			poolInfo.flags = 0; // Optional
+
+			if (vkCreateCommandPool(m_LogicalDevice, &poolInfo, nullptr, &m_CommandPool) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateCommandPool]: Failed to create Command Pool!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+		}
+
+		void Window::CreateCommandBuffers()
+		{
+			m_CommandBuffers.resize(m_SwapChainFramebuffers.size());
+
+			VkCommandBufferAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.commandPool = m_CommandPool;
+			// level: specifies if the allocated command buffers are primary or secondary command buffers.
+			// VK_COMMAND_BUFFER_LEVEL_PRIMARY		: Can be submitted to a queue for execution, but cannot be called from other command buffers.
+			// VK_COMMAND_BUFFER_LEVEL_SECONDARY	: Cannot be submitted directly, but can be called from primary command buffers. (helpful to reuse common operations from primary command buffers.)
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandBufferCount = (uint32_t)m_CommandBuffers.size();
+			if (vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, m_CommandBuffers.data()) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateCommandBuffers]: Failed to allocate Command Buffers!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			////////////////////////////////////////////////////////////////
+			// Starting command buffer recording
+			////////////////////////////////////////////////////////////////
+			// If the command buffer was already recorded once, then a call to vkBeginCommandBuffer will implicitly reset it.
+			// It's not possible to append commands to a buffer at a later time.
+			for (size_t i = 0; i < m_CommandBuffers.size(); i++) 
+			{
+				VkCommandBufferBeginInfo beginInfo = {};
+				beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+				// Flags: VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
+				// Flags: VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT : This is a secondary command buffer that will be entirely within a single render pass.
+				// Flags: VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT : The command buffer can be resubmitted while it is also already pending execution.
+				beginInfo.flags = 0; // how are we going to use the command buffer 
+				beginInfo.pInheritanceInfo = nullptr; // only relevant for secondary command buffers. It specifies which state to inherit from the calling primary command buffers.
+				if (vkBeginCommandBuffer(m_CommandBuffers[i], &beginInfo) != VK_SUCCESS)
+				{
+					static const std::string message = "[GraphicsSystem::Window::CreateCommandBuffers]: Failed to begin recording command buffers!";
+					VK_CORE_CRITICAL(message);
+					throw std::runtime_error(message);
+				}
+				////////////////////////////////////////////////////////////////
+				// Starting command buffer recording
+				////////////////////////////////////////////////////////////////
+				VkRenderPassBeginInfo renderPassInfo = {};
+				renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+				renderPassInfo.renderPass = m_RenderPass; // the render pass 
+				renderPassInfo.framebuffer = m_SwapChainFramebuffers[i]; // attachments to bind to the render pass (color attachments)
+				// define size of render area 
+				renderPassInfo.renderArea.offset = { 0, 0 };
+				renderPassInfo.renderArea.extent = m_SwapChainExtent;
+				// define the clear color used in "VK_ATTACHMENT_LOAD_OP_CLEAR" -> used as load operation for the color attachments 
+				VkClearValue clearColor = { 0.0f, 0.0f, 0.0f, 1.0f };
+				renderPassInfo.clearValueCount = 1;
+				renderPassInfo.pClearValues = &clearColor;
+				// beginning the render pass
+				// All of the functions that record commands can be recognized by their **** vkCmd **** prefix
+				// They all return void, so there will be no error handling until we've finished recording.
+				// @ Param 1: For every command is always the command buffer to record the command to.
+				// @ Param 2: Specifies the details of the render pass we've just provided.
+				// @ Param 3: Controls how the drawing commands within the render pass will be provided. It can have one of two values:
+				//1. VK_SUBPASS_CONTENTS_INLINE						: The render pass commands will be embedded in the primary command buffer itselfand no secondary command buffers will be executed.
+				//2. VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS	: The render pass commands will be executed from secondary command buffers.
+
+				vkCmdBeginRenderPass(m_CommandBuffers[i], &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+				// @ Param 2: graphics or compute pipeline? 
+				vkCmdBindPipeline(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline); // bind graphics pipeline
+
+				////////////////////////////////
+				//// Vertex buffer binding 
+				////////////////////////////////
+				// @Param: vertexCount: Even though we don't have a vertex buffer, we technically still have 3 vertices to draw.
+				// @Param: instanceCount : Used for instanced rendering, use 1 if you're not doing that.
+				// @Param: firstVertex : Used as an offset into the vertex buffer, defines the lowest value of gl_VertexIndex.
+				// @Param: firstInstance : Used as an offset for instanced rendering, defines the lowest value of gl_InstanceIndex.
+				VkBuffer vertexBuffers[] = { m_VertexBuffer };
+				VkDeviceSize offsets[] = { 0 };
+				vkCmdBindVertexBuffers(m_CommandBuffers[i], 0, 1, vertexBuffers, offsets); // binds vertex buffer to bindings
+				vkCmdBindIndexBuffer(m_CommandBuffers[i], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16); 
+
+				// This draws primitive vertices 
+				//vkCmdDraw(m_CommandBuffers[i], static_cast<uint32_t>(m_Vertices.size()), 1, 0, 0); 
+
+				vkCmdDrawIndexed(m_CommandBuffers[i], static_cast<uint32_t>(m_Indices.size()), 1, 0, 0, 0);
+				
+				// end the render pass 
+				vkCmdEndRenderPass(m_CommandBuffers[i]);
+				if (vkEndCommandBuffer(m_CommandBuffers[i]) != VK_SUCCESS) 
+				{
+					static const std::string message = "[GraphicsSystem::Window::CreateCommandBuffers]: Failed to record command buffer!";
+					VK_CORE_CRITICAL(message);
+					throw std::runtime_error(message);
+				}
+			}
+
+		}
+
+		void Window::CreateSyncObjects()
+		{
+			m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+			m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+			m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+			m_ImagesInFlight.resize(m_SwapChainImages.size(), VK_NULL_HANDLE);
+			
+			VkSemaphoreCreateInfo semaphoreInfo = {};
+			semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+			VkFenceCreateInfo fenceInfo = {};
+			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // initialize fences in signaled state, as if initial frame render occured 
+
+			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) 
+			{
+				if (vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS ||
+					vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS ||
+					vkCreateFence(m_LogicalDevice, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS)
+				{
+					static const std::string message = "[GraphicsSystem::Window::CreateSyncObjects]: Failed to create synchronization objects!";
+					VK_CORE_CRITICAL(message);
+					throw std::runtime_error(message);
+				}
+			}			
+		}
+		
+		void Window::RenderFrame()
+		{
+			vkWaitForFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+			
+			// 1. Acquire an image from the swap chain (Swap chain is extension feature)
+			uint32_t imageIndex; // final param in acquire function -> specifies index of swap chain image that has become available (VkImage) in m_SwapChainImages
+			
+			// @timeout: time out in nanoseconds for an image to become available, using max disables the timeout
+			// @synch objects to be signaled when presentation engine is finished using the image.
+			VkResult result = vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
+			if (result == VK_ERROR_OUT_OF_DATE_KHR)
+			{
+				RecreateSwapChain();
+				return;
+			}
+			else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::RenderFrame]: Failed to aquire swap chain image!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+			
+			// Check if a previous frame is using this image (i.e. there is its fence to wait on)
+			if (m_ImagesInFlight[imageIndex] != VK_NULL_HANDLE) 
+			{
+				vkWaitForFences(m_LogicalDevice, 1, &m_ImagesInFlight[imageIndex], VK_TRUE, UINT64_MAX);
+			}
+			// Mark the image as now being in use by this frame
+			m_ImagesInFlight[imageIndex] = m_InFlightFences[m_CurrentFrame];
+			
+			// 2. Execute the command buffer with that image as attachment in the framebuffer
+			// Queue submission and synchronization is configured through parameters in the VkSubmitInfo structure.
+			VkSubmitInfo submitInfo = {};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			VkSemaphore waitSemaphores[] = { m_ImageAvailableSemaphores[m_CurrentFrame] };
+			VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT }; //  which stages of the pipeline to wait 
+			submitInfo.waitSemaphoreCount = 1;
+			submitInfo.pWaitSemaphores = waitSemaphores;
+			submitInfo.pWaitDstStageMask = waitStages;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &m_CommandBuffers[imageIndex]; // which command buffers to submit for execution
+			VkSemaphore signalSemaphores[] = { m_RenderFinishedSemaphores[m_CurrentFrame] };
+			// The signalSemaphoreCount and pSignalSemaphores parameters specify which semaphores to signal once the command buffer(s) have finished execution
+			submitInfo.signalSemaphoreCount = 1;
+			submitInfo.pSignalSemaphores = signalSemaphores;
+
+			vkResetFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame]); // reset the fences 
+
+			// optional fence signaled when command buffer completes execution 
+			if (vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS)
+			{
+				static const std::string message = "[GraphicsSystem::Window::RenderFrame]: Failed to submit draw command buffer!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+			// 3. Return the image to the swap chain for presentation
+			VkPresentInfoKHR presentInfo = {};
+			presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+			presentInfo.waitSemaphoreCount = 1;
+			presentInfo.pWaitSemaphores = signalSemaphores; // which semaphores to wait on before presentation occurs
+			
+			VkSwapchainKHR swapChains[] = { m_SwapChain };
+			presentInfo.swapchainCount = 1;
+			presentInfo.pSwapchains = swapChains; // swap chains to present images to
+			presentInfo.pImageIndices = &imageIndex; // index of the image for each swap chain 
+			presentInfo.pResults = nullptr; // can specify an array of VkResult values to check for every individual swap chain if presentation was successful
+
+			result = vkQueuePresentKHR(m_PresentQueueHandle, &presentInfo); // submits the request ot present an image to the swap chain 
+
+			if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_WindowData.Properties.FramebufferResized) // recreate if out of date OR suboptimal
+			{
+				m_WindowData.Properties.FramebufferResized = false;
+				RecreateSwapChain();
+			}
+			else if (result != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::RenderFrame]: Failed to present swap chain image!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT; // move onto the next frame 
+
+			// subpass dependencies
+			// We have only a single subpass right now, but the operations right beforeand right after this subpass also count as implicit "subpasses".
+			// There are two built-in dependencies that take care of the transition at the start of the render pass and at the end of the render pass, but the former does not occur at the right time. It assumes that the transition occurs at the start of the pipeline, but we haven't acquired the image yet at that point! There are two ways to deal with this problem. We could change the waitStages for the imageAvailableSemaphore to VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT to ensure that the render passes don't begin until the image is available, or we can make the render pass wait for the VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT stage
+			
+			// Events are executed asynchronously, order of execution -> undefined...
+			// Need to synchronize swap chain events: fences & semaphores
+
+			// state of fences can be accessed using vkWaitForFences ->  Fences are mainly designed to synchronize your application itself with rendering operations
+			// semaphore states cannot be accessed -> used to synchronize operations within or across command queues
+
+			// Goal: Synchronize the queue operations of draw commands and presentation -> use semaphores
+		}
+
+		void Window::CleanupSwapChain()
+		{
+			for (auto framebuffer : m_SwapChainFramebuffers)
+			{
+				vkDestroyFramebuffer(m_LogicalDevice, framebuffer, nullptr); // destroy the framebuffers
+			}
+
+			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, static_cast<uint32_t>(m_CommandBuffers.size()), m_CommandBuffers.data());
+
+			vkDestroyPipeline(m_LogicalDevice, m_GraphicsPipeline, nullptr); // destroy the graphics pipeline 
+			vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr); // pipeline layout  (data passed to shaders)
+			vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr); // destroy the render pass 
+
+			for (auto imageView : m_SwapChainImageViews)  // destroy all the image views 
+			{
+				vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+			}
+			vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
+		}
+
+		void Window::RecreateSwapChain()
+		{
+			//TODO: change this temporary solution to a callback state 
+			int width = 0, height = 0;
+			glfwGetFramebufferSize(m_Window, &width, &height);
+			while (width == 0 || height == 0) 
+			{
+				glfwGetFramebufferSize(m_Window, &width, &height);
+				glfwWaitEvents();
+			}
+			vkDeviceWaitIdle(m_LogicalDevice); // in case resources are still in use 
+			CleanupSwapChain();
+			CreateVulkanSwapChain();
+			CreateVulkanImageViews(); // based on swap chain images 
+			CreateGraphicsRenderPass(); // depends on format of swap chain images (even though format may not change, should still be caught)
+			CreateGraphicsPipeline(); // viewport and scissor size  (Can be avoided by using dynamic state for viewports and scissor rectnagles)
+			CreateFramebuffers(); // depend on swap chain images
+			CreateCommandBuffers(); // depend on swap chain images 
+		}
+
+		void Window::CreateVertexBuffer()
+		{
+			const VkDeviceSize bufferSize = sizeof(m_Vertices[0]) * m_Vertices.size();
+
+			VkBuffer stagingBuffer; // used for mapping and copying vertex data 
+			VkDeviceMemory stagingBufferMemory;
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+			void* data;
+			vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+			memcpy(data, m_Vertices.data(), (size_t)bufferSize);
+			vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+			// VK_BUFFER_USAGE_TRANSFER_SRC_BIT: Buffer can be used as source in a memory transfer operation.	
+			// VK_BUFFER_USAGE_TRANSFER_DST_BIT : Buffer can be used as destination in a memory transfer operation.
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
+			CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
+
+			// clean staging buffers
+			vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+			vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+			
+			//VkBufferCreateInfo bufferInfo = {};
+			//bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			//bufferInfo.size = sizeof(m_Vertices[0]) * m_Vertices.size(); // total size of all Vertex data (bytes)
+			//bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // for which purposes the data in buffer is used (multiple purposes possible)
+			//bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // owned by a specific queue family, or shared  (used by graphics queue here, so exclusive access)
+			//bufferInfo.flags = 0; // configures sparse buffer memory, not used currently. 
+
+			//if (vkCreateBuffer(m_LogicalDevice, &bufferInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS) 
+			//{
+			//	static const std::string message = "[GraphicsSystem::Window::CreateVertexBuffer]: Failed to create vertex buffer!";
+			//	VK_CORE_CRITICAL(message);
+			//	throw std::runtime_error(message);
+			//}
+
+			//////////////////////////////////////////////////////////////////
+			//// Query buffer memory requirements
+			//////////////////////////////////////////////////////////////////
+			//// size: The size of the required amount of memory in bytes, may differ from bufferInfo.size.
+			//// alignment : The offset in bytes where the buffer begins in the allocated region of memory, depends on bufferInfo.usage and bufferInfo.flags.
+			//// memoryTypeBits : Bit field of the memory types that are suitable for the buffer.
+			//VkMemoryRequirements memRequirements;
+			//vkGetBufferMemoryRequirements(m_LogicalDevice, m_VertexBuffer, &memRequirements);
+
+			//VkMemoryAllocateInfo allocInfo = {};
+			//allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			//allocInfo.allocationSize = memRequirements.size;
+			//allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_PhysicalDevice);
+			//if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS) 
+			//{
+			//	static const std::string message = "[GraphicsSystem::Window::CreateVertexBuffer]: Failed to allocate vertex buffer memory!";
+			//	VK_CORE_CRITICAL(message);
+			//	throw std::runtime_error(message);
+			//}
+			
+			// associate memory buffer memory with the buffer
+			//todo: Note: If the offset is non - zero, then it is required to be divisible by memRequirements.alignment.
+			//VkBindBufferMemory(m_LogicalDevice, m_VertexBuffer, m_VertexBufferMemory, 0); // no offset as memory region allocated specifically for this vertex memory 
+
+			////////////////////////////////////////////////////////////////
+			// Filling the vertex buffer
+			////////////////////////////////////////////////////////////////
+			// https://en.wikipedia.org/wiki/Memory-mapped_I/O
+			//void* data;
+			// VK_WHOLE_SIZE maps all of memory, rather than just bufferinfo.size
+			// the last parameter specifies the output for the pointer to the mapped memory 
+			//vkMapMemory(m_LogicalDevice, m_VertexBufferMemory, 0, bufferSize, 0, &data);
+
+			// can now memcpy the vertex data to the mapped memoryand unmap it again using vkUnmapMemory.
+			// Unfortunately the driver may not immediately copy the data into the buffer memory,
+			// for example because of caching.
+			// It is also possible that writes to the buffer are not visible in the mapped memory yet.
+			// There are two ways to deal with that problem : [USING @1 IN THE CURRENT IMPLEMENTATION]
+			// @1: Use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+			// @": Call vkFlushMappedMemoryRanges to after writing to the mapped memory, and call vkInvalidateMappedMemoryRanges before reading from the mapped memory
+			//memcpy(data, m_Vertices.data(), (size_t)bufferSize);
+			//vkUnmapMemory(m_LogicalDevice, m_VertexBufferMemory);
+		}
+
+		//TODO (#2): The right way to allocate memory for a large number of objects at the same time is to create a custom allocator that splits up a single allocation among many different objects by using the offset parameters that we've seen in many functions.
+		void Window::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+		{
+			VkBufferCreateInfo bufferInfo = {};
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = size;
+			bufferInfo.usage = usage;
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			if (vkCreateBuffer(m_LogicalDevice, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateBuffer]: Failed to create buffer!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+			VkMemoryRequirements memRequirements;
+			vkGetBufferMemoryRequirements(m_LogicalDevice, buffer, &memRequirements);
+			VkMemoryAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties, m_PhysicalDevice);
+			if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateBuffer]: Failed to allocate buffer memory!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+			vkBindBufferMemory(m_LogicalDevice, buffer, bufferMemory, 0);
+		}
+
+		void Window::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+		{
+			// vertex buffer is device local, so it can't be mapped using VkMapMemory, so we copy data from the staging buffer to it.
+			// copies the contents from one buffer to another
+
+			VkCommandBufferAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandPool = m_CommandPool;
+			allocInfo.commandBufferCount = 1;
+
+			VkCommandBuffer commandBuffer;
+			vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, &commandBuffer);
+
+			VkCommandBufferBeginInfo beginInfo = {};
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // inform driver about copy intent (single usage) 
+
+			// temporarily record transfer commands (single copy command) 
+			vkBeginCommandBuffer(commandBuffer, &beginInfo);
+			VkBufferCopy copyRegion = {};
+			copyRegion.srcOffset = 0; // Optional
+			copyRegion.dstOffset = 0; // Optional
+			copyRegion.size = size;  // can't just copy entire buffer
+			vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion); // tranfers contents of the buffer
+			vkEndCommandBuffer(commandBuffer);
+
+			// immediately submit the copy commands to be executed 
+			VkSubmitInfo submitInfo = {};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &commandBuffer;
+
+			//TODO (#1): Using fences here will provide driver optimization opportunities if creating multiple buffers...
+			vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, VK_NULL_HANDLE); 
+			vkQueueWaitIdle(m_GraphicsQueueHandle); // waiting for the transfer queue to become idle
+
+			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer); // clean command buffer
+
+		}
+
+		void Window::CreateIndexBuffer()
+		{
+			const VkDeviceSize bufferSize = sizeof(m_Indices[0]) * m_Indices.size();
+
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+			void* data;
+			vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+			memcpy(data, m_Indices.data(), (size_t)bufferSize);
+			vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
+
+			CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
+
+			vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+			vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+		}
+
 		// ------------------------------ GLFW Settings ------------------------------
 
 		void Window::SetGLFWCallbacks()
@@ -751,6 +1271,22 @@ namespace Vulkan_Engine
 				WindowClosedEvent event;
 				windowData.EventCallback(event);
 			});
+
+			glfwSetWindowSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
+			{
+				WindowData& windowData = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				windowData.Properties.Width = width;
+				windowData.Properties.Height = height;
+				WindowResizeEvent event(width, height);
+				windowData.EventCallback(event);
+			});
+
+			glfwSetFramebufferSizeCallback(m_Window, [](GLFWwindow* window, int width, int height)
+			{
+				WindowData& windowData = *static_cast<WindowData*>(glfwGetWindowUserPointer(window));
+				windowData.Properties.FramebufferResized = true;
+			});
+
 		}
 
 		void Window::SetGLFWConfigurations()

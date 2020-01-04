@@ -21,9 +21,11 @@
 #include "Core/Events/Event.h"
 
 #include "Shaders/Shader.h"
+#include "Shaders/Vertex.h"
 
 namespace Vulkan_Engine
 {
+	class WindowResizeEvent;
 	// forward declarations 
 	class Timestep; 
 
@@ -36,15 +38,17 @@ namespace Vulkan_Engine
 			std::string Title;
 			unsigned int Width;
 			unsigned int Height;
-
+			bool FramebufferResized; 			// Explicit handling of framebuffer resizing 
+			
 			WindowProperties(const std::string& title = "Vulkan-Engine", unsigned int width = 800, unsigned int height = 600)
-				: Title(title), Width(width), Height(height) {}
+				: Title(title), Width(width), Height(height), FramebufferResized(false) {}
 
 			WindowProperties(const WindowProperties& copy)
 			{
 				Title = copy.Title;
 				Width = copy.Width;
 				Height = copy.Height;
+				FramebufferResized = copy.FramebufferResized;
 			}
 		};
 
@@ -84,7 +88,25 @@ namespace Vulkan_Engine
 			void CreateVulkanSwapChain(); 
 			void CreateVulkanImageViews();
 			void CreateGraphicsRenderPass(); 
-			void CreateGraphicsPipeline(); 
+			void CreateGraphicsPipeline();
+			void CreateFramebuffers();
+			void CreateCommandPool();
+			void CreateCommandBuffers();
+			///////////////////////////////
+			void CreateSyncObjects();
+			void RenderFrame();
+			///////////////////////////////
+			//// Everything that has to do with swap chain recreation
+			///////////////////////////////
+			void CleanupSwapChain();
+			void RecreateSwapChain();
+			///////////////////////////////
+			// Vertex buffer data
+			///////////////////////////////
+			void CreateVertexBuffer();  // does not depend on swap chain
+			void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory); // abstracted buffer creation function 
+			void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+			void CreateIndexBuffer();
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -106,6 +128,41 @@ namespace Vulkan_Engine
 			VkRenderPass m_RenderPass;
 			VkPipelineLayout m_PipelineLayout;
 			VkPipeline m_GraphicsPipeline;
+			std::vector<VkFramebuffer> m_SwapChainFramebuffers;
+			VkCommandPool m_CommandPool;
+			std::vector<VkCommandBuffer> m_CommandBuffers;
+			//////////////////////////////////////////////// (each frame should have its own) 
+			std::vector<VkSemaphore> m_ImageAvailableSemaphores; // signal image has been acquired & ready for rendering
+			std::vector<VkSemaphore> m_RenderFinishedSemaphores; // signal that rendering has finished & presentation can happen
+			std::vector<VkFence> m_InFlightFences; // used for cpu <-> gpu synchronization
+			std::vector<VkFence> m_ImagesInFlight; // used to track for each swap chain image, if a frame in flight is currently using it
+			size_t m_CurrentFrame = 0; // frame index used to keep track of the current frame for correct semaphore usage
+			//////////////////////////////////////////////////
+			//// Vertex buffer related variables
+			////TODO: Abstract this data as in Exalted.
+			//////////////////////////////////////////////////
+			//inline static const std::vector<Vertex> m_TriangleVertices = 
+			//{
+			//	{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
+			//	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+			//	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+			//};
+			// quad vertices using an index buffer 
+			const std::vector<Vertex> m_Vertices = 
+			{
+				{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+				{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+				{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+				{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+			};
+			VkBuffer m_VertexBuffer; // does not depend on swap chain 
+			VkDeviceMemory m_VertexBufferMemory; // stores handle to buffer memory
+			const std::vector<uint16_t> m_Indices =
+			{
+				0, 1, 2, 2, 3, 0
+			};
+			VkBuffer m_IndexBuffer; // handle to index buffer 
+			VkDeviceMemory m_IndexBufferMemory;  // handle to index memory
 		};
 	}
 }
