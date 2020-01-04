@@ -1083,52 +1083,71 @@ namespace Vulkan_Engine
 
 		void Window::CreateVertexBuffer()
 		{
-			VkBufferCreateInfo bufferInfo = {};
-			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-			bufferInfo.size = sizeof(m_Vertices[0]) * m_Vertices.size(); // total size of all Vertex data (bytes)
-			bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // for which purposes the data in buffer is used (multiple purposes possible)
-			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // owned by a specific queue family, or shared  (used by graphics queue here, so exclusive access)
-			bufferInfo.flags = 0; // configures sparse buffer memory, not used currently. 
+			const VkDeviceSize bufferSize = sizeof(m_Vertices[0]) * m_Vertices.size();
 
-			if (vkCreateBuffer(m_LogicalDevice, &bufferInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS) 
-			{
-				static const std::string message = "[GraphicsSystem::Window::CreateVertexBuffer]: Failed to create vertex buffer!";
-				VK_CORE_CRITICAL(message);
-				throw std::runtime_error(message);
-			}
+			VkBuffer stagingBuffer; // used for mapping and copying vertex data 
+			VkDeviceMemory stagingBufferMemory;
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+			void* data;
+			vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+			memcpy(data, m_Vertices.data(), (size_t)bufferSize);
+			vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
 
-			////////////////////////////////////////////////////////////////
-			// Query buffer memory requirements
-			////////////////////////////////////////////////////////////////
-			// size: The size of the required amount of memory in bytes, may differ from bufferInfo.size.
-			// alignment : The offset in bytes where the buffer begins in the allocated region of memory, depends on bufferInfo.usage and bufferInfo.flags.
-			// memoryTypeBits : Bit field of the memory types that are suitable for the buffer.
-			VkMemoryRequirements memRequirements;
-			vkGetBufferMemoryRequirements(m_LogicalDevice, m_VertexBuffer, &memRequirements);
+			// VK_BUFFER_USAGE_TRANSFER_SRC_BIT: Buffer can be used as source in a memory transfer operation.	
+			// VK_BUFFER_USAGE_TRANSFER_DST_BIT : Buffer can be used as destination in a memory transfer operation.
+			CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
+			CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
 
-			VkMemoryAllocateInfo allocInfo = {};
-			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-			allocInfo.allocationSize = memRequirements.size;
-			allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_PhysicalDevice);
-			if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS) 
-			{
-				static const std::string message = "[GraphicsSystem::Window::CreateVertexBuffer]: Failed to allocate vertex buffer memory!";
-				VK_CORE_CRITICAL(message);
-				throw std::runtime_error(message);
-			}
+			// clean staging buffers
+			vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+			vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+			
+			//VkBufferCreateInfo bufferInfo = {};
+			//bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			//bufferInfo.size = sizeof(m_Vertices[0]) * m_Vertices.size(); // total size of all Vertex data (bytes)
+			//bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // for which purposes the data in buffer is used (multiple purposes possible)
+			//bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // owned by a specific queue family, or shared  (used by graphics queue here, so exclusive access)
+			//bufferInfo.flags = 0; // configures sparse buffer memory, not used currently. 
+
+			//if (vkCreateBuffer(m_LogicalDevice, &bufferInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS) 
+			//{
+			//	static const std::string message = "[GraphicsSystem::Window::CreateVertexBuffer]: Failed to create vertex buffer!";
+			//	VK_CORE_CRITICAL(message);
+			//	throw std::runtime_error(message);
+			//}
+
+			//////////////////////////////////////////////////////////////////
+			//// Query buffer memory requirements
+			//////////////////////////////////////////////////////////////////
+			//// size: The size of the required amount of memory in bytes, may differ from bufferInfo.size.
+			//// alignment : The offset in bytes where the buffer begins in the allocated region of memory, depends on bufferInfo.usage and bufferInfo.flags.
+			//// memoryTypeBits : Bit field of the memory types that are suitable for the buffer.
+			//VkMemoryRequirements memRequirements;
+			//vkGetBufferMemoryRequirements(m_LogicalDevice, m_VertexBuffer, &memRequirements);
+
+			//VkMemoryAllocateInfo allocInfo = {};
+			//allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			//allocInfo.allocationSize = memRequirements.size;
+			//allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_PhysicalDevice);
+			//if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS) 
+			//{
+			//	static const std::string message = "[GraphicsSystem::Window::CreateVertexBuffer]: Failed to allocate vertex buffer memory!";
+			//	VK_CORE_CRITICAL(message);
+			//	throw std::runtime_error(message);
+			//}
 			
 			// associate memory buffer memory with the buffer
 			//todo: Note: If the offset is non - zero, then it is required to be divisible by memRequirements.alignment.
-			vkBindBufferMemory(m_LogicalDevice, m_VertexBuffer, m_VertexBufferMemory, 0); // no offset as memory region allocated specifically for this vertex memory 
+			//VkBindBufferMemory(m_LogicalDevice, m_VertexBuffer, m_VertexBufferMemory, 0); // no offset as memory region allocated specifically for this vertex memory 
 
 			////////////////////////////////////////////////////////////////
 			// Filling the vertex buffer
 			////////////////////////////////////////////////////////////////
 			// https://en.wikipedia.org/wiki/Memory-mapped_I/O
-			void* data;
+			//void* data;
 			// VK_WHOLE_SIZE maps all of memory, rather than just bufferinfo.size
 			// the last parameter specifies the output for the pointer to the mapped memory 
-			vkMapMemory(m_LogicalDevice, m_VertexBufferMemory, 0, bufferInfo.size, 0, &data);
+			//vkMapMemory(m_LogicalDevice, m_VertexBufferMemory, 0, bufferSize, 0, &data);
 
 			// can now memcpy the vertex data to the mapped memoryand unmap it again using vkUnmapMemory.
 			// Unfortunately the driver may not immediately copy the data into the buffer memory,
@@ -1137,8 +1156,78 @@ namespace Vulkan_Engine
 			// There are two ways to deal with that problem : [USING @1 IN THE CURRENT IMPLEMENTATION]
 			// @1: Use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
 			// @": Call vkFlushMappedMemoryRanges to after writing to the mapped memory, and call vkInvalidateMappedMemoryRanges before reading from the mapped memory
-			memcpy(data, m_Vertices.data(), (size_t)bufferInfo.size);
-			vkUnmapMemory(m_LogicalDevice, m_VertexBufferMemory);
+			//memcpy(data, m_Vertices.data(), (size_t)bufferSize);
+			//vkUnmapMemory(m_LogicalDevice, m_VertexBufferMemory);
+		}
+
+		//TODO (#2): The right way to allocate memory for a large number of objects at the same time is to create a custom allocator that splits up a single allocation among many different objects by using the offset parameters that we've seen in many functions.
+		void Window::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+		{
+			VkBufferCreateInfo bufferInfo = {};
+			bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+			bufferInfo.size = size;
+			bufferInfo.usage = usage;
+			bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+			if (vkCreateBuffer(m_LogicalDevice, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateBuffer]: Failed to create buffer!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+			VkMemoryRequirements memRequirements;
+			vkGetBufferMemoryRequirements(m_LogicalDevice, buffer, &memRequirements);
+			VkMemoryAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties, m_PhysicalDevice);
+			if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateBuffer]: Failed to allocate buffer memory!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+			vkBindBufferMemory(m_LogicalDevice, buffer, bufferMemory, 0);
+		}
+
+		void Window::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+		{
+			// vertex buffer is device local, so it can't be mapped using VkMapMemory, so we copy data from the staging buffer to it.
+			// copies the contents from one buffer to another
+
+			VkCommandBufferAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandPool = m_CommandPool;
+			allocInfo.commandBufferCount = 1;
+
+			VkCommandBuffer commandBuffer;
+			vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, &commandBuffer);
+
+			VkCommandBufferBeginInfo beginInfo = {};
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // inform driver about copy intent (single usage) 
+
+			// temporarily record transfer commands (single copy command) 
+			vkBeginCommandBuffer(commandBuffer, &beginInfo);
+			VkBufferCopy copyRegion = {};
+			copyRegion.srcOffset = 0; // Optional
+			copyRegion.dstOffset = 0; // Optional
+			copyRegion.size = size;  // can't just copy entire buffer
+			vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion); // tranfers contents of the buffer
+			vkEndCommandBuffer(commandBuffer);
+
+			// immediately submit the copy commands to be executed 
+			VkSubmitInfo submitInfo = {};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &commandBuffer;
+
+			//TODO (#1): Using fences here will provide driver optimization opportunities if creating multiple buffers...
+			vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, VK_NULL_HANDLE); 
+			vkQueueWaitIdle(m_GraphicsQueueHandle); // waiting for the transfer queue to become idle
+
+			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer); // clean command buffer
+
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------

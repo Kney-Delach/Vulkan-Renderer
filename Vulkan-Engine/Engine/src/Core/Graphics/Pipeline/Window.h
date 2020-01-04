@@ -103,7 +103,9 @@ namespace Vulkan_Engine
 			///////////////////////////////
 			// Vertex buffer data
 			///////////////////////////////
-			void CreateVertexBuffer();  // does not depend on swap chain 
+			void CreateVertexBuffer();  // does not depend on swap chain
+			void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory); // abstracted buffer creation function 
+			void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
