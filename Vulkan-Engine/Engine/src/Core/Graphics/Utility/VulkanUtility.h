@@ -176,19 +176,24 @@ namespace Vulkan_Engine
 		}
 
 		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device, VkSurfaceKHR& surface)
-		{			
+		{
 			const QueueFamilyIndices indices = FindQueueFamilies(device, surface);
 			const bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
+			VkPhysicalDeviceFeatures supportedFeatures;
+			vkGetPhysicalDeviceFeatures(device, &supportedFeatures); // query for supported hardware features 
+
 			bool swapChainAdequate = false;
-			if (extensionsSupported) 
+			if (extensionsSupported)
 			{
 				//TODO: Currently only require at least a single supported image format and a single supported presentation mode 
 				const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device, surface);
 				swapChainAdequate = !swapChainSupport.Formats.empty() && !swapChainSupport.PresentModes.empty();
 			}
-			return indices.IsComplete() && extensionsSupported && swapChainAdequate;
+			return indices.IsComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
 		}
+		
+		
 
 		// ------------------------ Functions to create the best possible swap chain ------------------------  //
 		// 3 settings

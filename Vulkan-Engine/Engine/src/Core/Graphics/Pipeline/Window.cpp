@@ -25,6 +25,9 @@
 
 #include <chrono>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 const int MAX_FRAMES_IN_FLIGHT = 2; // number of frames that should be processed concurrently 
 
 namespace Vulkan_Engine
@@ -51,6 +54,11 @@ namespace Vulkan_Engine
 			vkDeviceWaitIdle(m_LogicalDevice); // wait for operations in a specific command queue to be finished
 			
 			CleanupSwapChain();
+
+			vkDestroySampler(m_LogicalDevice, m_TextureSampler, nullptr); // destroy texture sampler
+			vkDestroyImageView(m_LogicalDevice, m_TextureImageView, nullptr); // destroy image views
+			vkDestroyImage(m_LogicalDevice, m_TextureImage, nullptr); // destroy image 
+			vkFreeMemory(m_LogicalDevice, m_TextureImageMemory, nullptr); // destroy image memory 
 			
 			vkDestroyDescriptorSetLayout(m_LogicalDevice, m_DescriptorSetLayout, nullptr); // clean up descriptor binding sets
 			vkDestroyBuffer(m_LogicalDevice, m_IndexBuffer, nullptr); // destroy index buffer
@@ -156,6 +164,9 @@ namespace Vulkan_Engine
 			CreateGraphicsPipeline();
 			CreateFramebuffers();
 			CreateCommandPool();
+			CreateTextureImage();
+			CreateTextureImageView();
+			CreateTextureSampler();
 			CreateVertexBuffer(); // vertex buffer creation
 			CreateIndexBuffer(); // index buffer creation
 			CreateUniformBuffers(); // uniform buffer creation
@@ -328,6 +339,7 @@ namespace Vulkan_Engine
 			
 			// specify features of device being used
 			VkPhysicalDeviceFeatures deviceFeatures = {}; //TODO: Come back to this
+			deviceFeatures.samplerAnisotropy = VK_TRUE; // request anisotropic filtering to be enabled 
 
 			// create the logical device info
 			VkDeviceCreateInfo createInfo = {};
@@ -436,37 +448,42 @@ namespace Vulkan_Engine
 		void Window::CreateVulkanImageViews()
 		{
 			m_SwapChainImageViews.resize(m_SwapChainImages.size());
-			for (size_t i = 0; i < m_SwapChainImages.size(); i++)
+			for (uint32_t i = 0; i < m_SwapChainImages.size(); i++)
 			{
-				// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkImageViewCreateInfo.html
-				// set an info for each chain image before creating it 
-				VkImageViewCreateInfo createInfo = {};
-				createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; 
-				createInfo.image = m_SwapChainImages[i];
-				// how should the image be interpreted 
-				createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;   // 1D, 2D, 3D, cubemaps
-				createInfo.format = m_SwapChainImageFormat;
-				// Swizzle color channels -> maps the rgba components to specific channels 
-				createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-				createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-				// describes what the image's purpose is & which part of the image should be accessed.
-				createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // use image as a color target
-				createInfo.subresourceRange.baseMipLevel = 0; // no mipmap generation 
-				createInfo.subresourceRange.levelCount = 1;
-				createInfo.subresourceRange.baseArrayLayer = 0;
-				//If you were working on a stereographic 3D application, then you would create a swap chain with multiple layers.You could then create multiple image views for each image representing the views for the leftand right eyes by accessing different layers.
-				createInfo.subresourceRange.layerCount = 1; // image will have a single layer
-
-				// create the image view
-				if (vkCreateImageView(m_LogicalDevice, &createInfo, nullptr, &m_SwapChainImageViews[i]) != VK_SUCCESS) 
-				{
-					static const std::string message = "[GraphicsSystem::Window::CreateVulkanImageViews]: Failed to create image view!";
-					VK_CORE_CRITICAL(message);
-					throw std::runtime_error(message);		
-				}
+				m_SwapChainImageViews[i] = CreateImageView(m_SwapChainImages[i], m_SwapChainImageFormat);
 			}
+			//for (size_t i = 0; i < m_SwapChainImages.size(); i++)
+			//{
+			//	
+			//	// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkImageViewCreateInfo.html
+			//	// set an info for each chain image before creating it 
+			//	VkImageViewCreateInfo createInfo = {};
+			//	createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO; 
+			//	createInfo.image = m_SwapChainImages[i];
+			//	// how should the image be interpreted 
+			//	createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;   // 1D, 2D, 3D, cubemaps
+			//	createInfo.format = m_SwapChainImageFormat;
+			//	// Swizzle color channels -> maps the rgba components to specific channels 
+			//	createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+			//	createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+			//	createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+			//	createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+			//	// describes what the image's purpose is & which part of the image should be accessed.
+			//	createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // use image as a color target
+			//	createInfo.subresourceRange.baseMipLevel = 0; // no mipmap generation 
+			//	createInfo.subresourceRange.levelCount = 1;
+			//	createInfo.subresourceRange.baseArrayLayer = 0;
+			//	//If you were working on a stereographic 3D application, then you would create a swap chain with multiple layers.You could then create multiple image views for each image representing the views for the leftand right eyes by accessing different layers.
+			//	createInfo.subresourceRange.layerCount = 1; // image will have a single layer
+
+			//	// create the image view
+			//	if (vkCreateImageView(m_LogicalDevice, &createInfo, nullptr, &m_SwapChainImageViews[i]) != VK_SUCCESS) 
+			//	{
+			//		static const std::string message = "[GraphicsSystem::Window::CreateVulkanImageViews]: Failed to create image view!";
+			//		VK_CORE_CRITICAL(message);
+			//		throw std::runtime_error(message);		
+			//	}
+			//}
 		}
 
 		// tell Vulkan about the framebuffer attachments
@@ -1214,42 +1231,50 @@ namespace Vulkan_Engine
 
 		void Window::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
 		{
-			// vertex buffer is device local, so it can't be mapped using VkMapMemory, so we copy data from the staging buffer to it.
-			// copies the contents from one buffer to another
+			const VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
 
-			VkCommandBufferAllocateInfo allocInfo = {};
-			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocInfo.commandPool = m_CommandPool;
-			allocInfo.commandBufferCount = 1;
-
-			VkCommandBuffer commandBuffer;
-			vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, &commandBuffer);
-
-			VkCommandBufferBeginInfo beginInfo = {};
-			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // inform driver about copy intent (single usage) 
-
-			// temporarily record transfer commands (single copy command) 
-			vkBeginCommandBuffer(commandBuffer, &beginInfo);
 			VkBufferCopy copyRegion = {};
-			copyRegion.srcOffset = 0; // Optional
-			copyRegion.dstOffset = 0; // Optional
-			copyRegion.size = size;  // can't just copy entire buffer
-			vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion); // tranfers contents of the buffer
-			vkEndCommandBuffer(commandBuffer);
+			copyRegion.size = size;
+			vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
 
-			// immediately submit the copy commands to be executed 
-			VkSubmitInfo submitInfo = {};
-			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &commandBuffer;
+			EndSingleTimeCommands(commandBuffer);
+			
+			//// vertex buffer is device local, so it can't be mapped using VkMapMemory, so we copy data from the staging buffer to it.
+			//// copies the contents from one buffer to another
 
-			//TODO (#1): Using fences here will provide driver optimization opportunities if creating multiple buffers...
-			vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, VK_NULL_HANDLE); 
-			vkQueueWaitIdle(m_GraphicsQueueHandle); // waiting for the transfer queue to become idle
+			//VkCommandBufferAllocateInfo allocInfo = {};
+			//allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			//allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			//allocInfo.commandPool = m_CommandPool;
+			//allocInfo.commandBufferCount = 1;
 
-			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer); // clean command buffer
+			//VkCommandBuffer commandBuffer;
+			//vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, &commandBuffer);
+
+			//VkCommandBufferBeginInfo beginInfo = {};
+			//beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			//beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT; // inform driver about copy intent (single usage) 
+
+			//// temporarily record transfer commands (single copy command) 
+			//vkBeginCommandBuffer(commandBuffer, &beginInfo);
+			//VkBufferCopy copyRegion = {};
+			//copyRegion.srcOffset = 0; // Optional
+			//copyRegion.dstOffset = 0; // Optional
+			//copyRegion.size = size;  // can't just copy entire buffer
+			//vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion); // tranfers contents of the buffer
+			//vkEndCommandBuffer(commandBuffer);
+
+			//// immediately submit the copy commands to be executed 
+			//VkSubmitInfo submitInfo = {};
+			//submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			//submitInfo.commandBufferCount = 1;
+			//submitInfo.pCommandBuffers = &commandBuffer;
+
+			////TODO (#1): Using fences here will provide driver optimization opportunities if creating multiple buffers...
+			//vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, VK_NULL_HANDLE); 
+			//vkQueueWaitIdle(m_GraphicsQueueHandle); // waiting for the transfer queue to become idle
+
+			//vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer); // clean command buffer
 
 		}
 
@@ -1387,6 +1412,288 @@ namespace Vulkan_Engine
 			vkMapMemory(m_LogicalDevice, m_UniformBuffersMemory[imageIndex], 0, sizeof(ubo), 0, &data);
 			memcpy(data, &ubo, sizeof(ubo));
 			vkUnmapMemory(m_LogicalDevice, m_UniformBuffersMemory[imageIndex]);
+		}
+
+		void Window::CreateTextureImage()
+		{
+			// load image data from file using stbi 
+			int texWidth, texHeight, texChannels;
+			stbi_uc* pixels = stbi_load("../Resources/Textures/tex.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+			VkDeviceSize imageSize = texWidth * texHeight * 4; //TODO: Deal with this isue 
+
+			if (!pixels) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateTextureImage]: Failed to load textured image!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			// transfer data from image pixels to VkImage object
+			VkBuffer stagingBuffer;
+			VkDeviceMemory stagingBufferMemory;
+			// create host visible memory buffer
+			CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+			// directly copy pixel values from image to buffer
+			void* data;
+			vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, imageSize, 0, &data);
+			memcpy(data, pixels, static_cast<size_t>(imageSize));
+			vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+			// clean up image data 
+			stbi_image_free(pixels);
+
+			// create the image 
+			CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_TextureImage, m_TextureImageMemory);
+
+			// copy the staging buffer to texture image
+			// 1. Transition the texture image to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+			// 2. Execute the buffer to image copy operation
+			// transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			TransitionImageLayout(m_TextureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+			CopyBufferToImage(stagingBuffer, m_TextureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+
+			// prepare texture data for shader access 
+			TransitionImageLayout(m_TextureImage, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			// cleanup staging buffer memory 
+			vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+			vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+		}
+
+		void Window::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
+		{
+			VkImageCreateInfo imageInfo = {};
+			imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+			imageInfo.imageType = VK_IMAGE_TYPE_2D;
+			imageInfo.extent.width = width;
+			imageInfo.extent.height = height;
+			imageInfo.extent.depth = 1;
+			imageInfo.mipLevels = 1;
+			imageInfo.arrayLayers = 1;
+			imageInfo.format = format;
+			imageInfo.tiling = tiling;
+			imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			imageInfo.usage = usage;
+			imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+			imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+			if (vkCreateImage(m_LogicalDevice, &imageInfo, nullptr, &image) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateImage]: Failed to create image!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			VkMemoryRequirements memRequirements;
+			vkGetImageMemoryRequirements(m_LogicalDevice, image, &memRequirements);
+
+			VkMemoryAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+			allocInfo.allocationSize = memRequirements.size;
+			allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties, m_PhysicalDevice);
+
+			if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::CreateImage]: Failed to allocate image memory!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			vkBindImageMemory(m_LogicalDevice, image, imageMemory, 0);
+		}
+
+		void Window::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
+		{
+			VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+
+			// used to synchronize access to thge resources 
+			VkImageMemoryBarrier barrier = {};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.oldLayout = oldLayout; // can be undefined (if we don't care about existing contents of image) 
+			barrier.newLayout = newLayout;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED; // if using barrier to transfer queue family ownership,  otherwise must be set as not default
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = image; // image that is affected 
+			barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			barrier.subresourceRange.baseMipLevel = 0;
+			barrier.subresourceRange.levelCount = 1;
+			barrier.subresourceRange.baseArrayLayer = 0;
+			barrier.subresourceRange.layerCount = 1;
+			
+			VkPipelineStageFlags sourceStage;
+			VkPipelineStageFlags destinationStage;
+
+			if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) 
+			{
+				barrier.srcAccessMask = 0; // since writes don't wait on anything 
+				barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+				sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+				destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT; // pseudo-stage (not a real stage in graphics pipeline where transfer happens) https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineStageFlagBits.html
+			}
+			else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) 
+			{
+				barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+				sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+				destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+			}
+			else 
+			{
+				static const std::string message = "[GraphicsSystem::Window::TransitionImageLayout]: Unsupported layout transition!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			vkCmdPipelineBarrier(
+				commandBuffer,
+				sourceStage, destinationStage,
+				0,
+				0, nullptr,
+				0, nullptr,
+				1, &barrier
+			);
+			
+			EndSingleTimeCommands(commandBuffer);
+		}
+
+		void Window::CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+		{
+			VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+
+			// used to specify which part of the buffer is going to be copied to which part of the image 
+			VkBufferImageCopy region = {};
+			region.bufferOffset = 0;
+			region.bufferRowLength = 0;
+			region.bufferImageHeight = 0;
+
+			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			region.imageSubresource.mipLevel = 0;
+			region.imageSubresource.baseArrayLayer = 0;
+			region.imageSubresource.layerCount = 1;
+
+			region.imageOffset = { 0, 0, 0 };
+			region.imageExtent = {
+				width,
+				height,
+				1
+			};
+
+			// buffer to image copy operations enqueue
+			vkCmdCopyBufferToImage(
+				commandBuffer,
+				buffer,
+				image,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1,
+				&region
+			);
+			
+			EndSingleTimeCommands(commandBuffer);
+		}
+
+		void Window::CreateTextureImageView()
+		{
+			m_TextureImageView = CreateImageView(m_TextureImage, VK_FORMAT_R8G8B8A8_UNORM);
+		}
+
+		void Window::CreateTextureSampler()
+		{
+			// configures all filters and transformations a sampler should apply 
+			VkSamplerCreateInfo samplerInfo = {};
+			samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+			samplerInfo.magFilter = VK_FILTER_LINEAR; // how to interpolate texels that are magnified (oversampling)
+			samplerInfo.minFilter = VK_FILTER_LINEAR; // how to interpolate texels that are minified (undersampling)
+			// address mode can be specified per axis
+			// VK_SAMPLER_ADDRESS_MODE_REPEAT				: Repeat the texture when going beyond the image dimensions.
+			// VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT		: Like repeat, but inverts the coordinates to mirror the image when going beyond the dimensions.
+			// VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE		: Take the color of the edge closest to the coordinate beyond the image dimensions.
+			// VK_SAMPLER_ADDRESS_MODE_MIRROR_CLAMP_TO_EDGE : Like clamp to edge, but instead uses the edge opposite to the closest edge.
+			// VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER		: Return a solid color when sampling beyond the dimensions of the image.
+			samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			//TODO: Query what the hardware can handle ?
+			samplerInfo.anisotropyEnable = VK_TRUE;
+			samplerInfo.maxAnisotropy = 16; // lower value better performance (limits amount of texel values that can be used)
+			samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK; // black, white, trasnparent as either int or float 
+			samplerInfo.unnormalizedCoordinates = VK_FALSE; // which co-ordinate system we want to use to address the texels in the image (true -> 0-texWidth / height] (otherwise, 0-1)
+			samplerInfo.compareEnable = VK_FALSE; //TODO: Used for shadowmaps https://developer.nvidia.com/gpugems/gpugems/part-ii-lighting-and-shadows/chapter-11-shadow-map-antialiasing
+			samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+			//TODO: Mipmapping
+			samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			samplerInfo.mipLodBias = 0.0f;
+			samplerInfo.minLod = 0.0f;
+			samplerInfo.maxLod = 0.0f;
+
+			if (vkCreateSampler(m_LogicalDevice, &samplerInfo, nullptr, &m_TextureSampler) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::TransitionImageLayout]: Failed to create texture sampler!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+		}
+
+
+		VkImageView  Window::CreateImageView(VkImage image, VkFormat format)
+		{
+			VkImageViewCreateInfo viewInfo = {};
+			viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+			viewInfo.image = image;
+			viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+			viewInfo.format = format;
+			viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+			viewInfo.subresourceRange.baseMipLevel = 0;
+			viewInfo.subresourceRange.levelCount = 1;
+			viewInfo.subresourceRange.baseArrayLayer = 0;
+			viewInfo.subresourceRange.layerCount = 1;
+
+			VkImageView imageView;
+			if (vkCreateImageView(m_LogicalDevice, &viewInfo, nullptr, &imageView) != VK_SUCCESS) 
+			{
+				static const std::string message = "[GraphicsSystem::Window::TransitionImageLayout]: Failed to create texture image view!";
+				VK_CORE_CRITICAL(message);
+				throw std::runtime_error(message);
+			}
+
+			return imageView;
+		}
+
+		VkCommandBuffer Window::BeginSingleTimeCommands()
+		{
+			VkCommandBufferAllocateInfo allocInfo = {};
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandPool = m_CommandPool;
+			allocInfo.commandBufferCount = 1;
+
+			VkCommandBuffer commandBuffer;
+			vkAllocateCommandBuffers(m_LogicalDevice, &allocInfo, &commandBuffer);
+
+			VkCommandBufferBeginInfo beginInfo = {};
+			beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+			beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+			vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+			return commandBuffer;
+		}
+
+		void Window::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
+		{
+			vkEndCommandBuffer(commandBuffer);
+
+			VkSubmitInfo submitInfo = {};
+			submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+			submitInfo.commandBufferCount = 1;
+			submitInfo.pCommandBuffers = &commandBuffer;
+
+			vkQueueSubmit(m_GraphicsQueueHandle, 1, &submitInfo, VK_NULL_HANDLE);
+			vkQueueWaitIdle(m_GraphicsQueueHandle);
+
+			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer);
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------

@@ -58,7 +58,8 @@ project "Engine"
 		"%{IncludeDir.GLFW}",
 		"%{IncludeDir.glm}",
 		"C:/VulkanSDK/1.1.130.0/Include",
-		"%{prj.name}/Resources/"
+		"%{prj.name}/Resources/",
+		"%{prj.name}/Dependencies/STB/include"
 	}
 
 	libdirs 

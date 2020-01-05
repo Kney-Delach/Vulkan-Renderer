@@ -116,6 +116,19 @@ namespace Vulkan_Engine
 			void CreateDescriptorPool();
 			void CreateDescriptorSets();
 			void UpdateUniformBuffer(uint32_t imageIndex, const Timestep deltaTime);
+			///////////////////////////////
+			// Texture Mapping 
+			///////////////////////////////
+			void CreateTextureImage();
+			void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+			void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+			void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+			void CreateTextureImageView();
+			void CreateTextureSampler();
+			VkImageView CreateImageView(VkImage image, VkFormat format);
+			// recording and executing command buffer abstractions 
+			VkCommandBuffer BeginSingleTimeCommands();
+			void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -177,6 +190,11 @@ namespace Vulkan_Engine
 			std::vector<VkDeviceMemory> m_UniformBuffersMemory;
 			VkDescriptorPool m_DescriptorPool;
 			std::vector<VkDescriptorSet> m_DescriptorSets;
+			// texture mapping stuff
+			VkImage m_TextureImage;
+			VkDeviceMemory m_TextureImageMemory;
+			VkImageView m_TextureImageView;
+			VkSampler m_TextureSampler;
 		};
 	}
 }
