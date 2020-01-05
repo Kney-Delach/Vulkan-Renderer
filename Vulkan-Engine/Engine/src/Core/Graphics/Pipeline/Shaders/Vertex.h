@@ -14,11 +14,12 @@ namespace Vulkan_Engine
 		{
 			glm::vec2 Position;
 			glm::vec3 Color;
+			glm::vec2 TexCoord;
 
 			// describes at which rate to load data from memory throughout the vertices
 			// specifies the number of bytes between data entries, and whether to move
 			// to the next data entry after each vertex or after each instance
-			static VkVertexInputBindingDescription getBindingDescription()
+			static VkVertexInputBindingDescription GetBindingDescription()
 			{
 				VkVertexInputBindingDescription bindingDescription = {};
 				bindingDescription.binding = 0; // index of this binding description in the array of bindings 
@@ -29,9 +30,9 @@ namespace Vulkan_Engine
 
 			// two of these structures used (as using 2 attributes, POSITION & COLOR)
 			// describes how to extract vertex attributes from a chunk of vertex data originating from a binding description.
-			static std::array<VkVertexInputAttributeDescription, 2> getAttributeDescriptions()
+			static std::array<VkVertexInputAttributeDescription, 3> GetAttributeDescriptions()
 			{
-				std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+				std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions = {};
 
 				// position attribute per-vertex description
 				attributeDescriptions[0].binding = 0; // which binding the per vertex data comes from (binding 0 above)
@@ -52,6 +53,11 @@ namespace Vulkan_Engine
 				attributeDescriptions[1].location = 1;
 				attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
 				attributeDescriptions[1].offset = offsetof(Vertex, Color);
+
+				attributeDescriptions[2].binding = 0;
+				attributeDescriptions[2].location = 2;
+				attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+				attributeDescriptions[2].offset = offsetof(Vertex, TexCoord);
 				
 				return attributeDescriptions;
 			}

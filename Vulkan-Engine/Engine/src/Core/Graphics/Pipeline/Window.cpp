@@ -602,8 +602,8 @@ namespace Vulkan_Engine
 			////////////////////////////////////////////
 			// https://www.khronos.org/registry/vulkan/specs/1.1-extensions/man/html/VkPipelineVertexInputStateCreateInfo.html
 			//todo: this section should be abstracted along with the vertex abstraction
-			auto bindingDescription = Vertex::getBindingDescription();
-			auto attributeDescriptions = Vertex::getAttributeDescriptions();
+			auto bindingDescription = Vertex::GetBindingDescription();
+			auto attributeDescriptions = Vertex::GetAttributeDescriptions();
 			VkPipelineVertexInputStateCreateInfo vertexInputInfo = {}; // format of the vertex data to pass to vertex shader 
 			vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 			// bindings: spacing between data and wheter data is per-vertex or per-instance
@@ -709,22 +709,22 @@ namespace Vulkan_Engine
 			// where we want the new color to be blended with the old color based on its opacity
 			VkPipelineColorBlendAttachmentState colorBlendAttachment = {}; // attachment per framebuffer 
 			colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-			colorBlendAttachment.blendEnable = VK_FALSE; // if false -> unmodified, otherwise -> mixing operation occurs &'d with colorWriteMask to determine which colors to pass 
-			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
-			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
-			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
-			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
+			//colorBlendAttachment.blendEnable = vk_False; // if false -> unmodified, otherwise -> mixing operation occurs &'d with colorWriteMask to determine which colors to pass 
+			//colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+			//colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+			//colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD; // Optional
+			//colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE; // Optional
+			//colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
+			//colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
 			 
 			//TODO: Example -> alpha opacity blending
-			//colorBlendAttachment.blendEnable = VK_TRUE;
-			//colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-			//colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-			//colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
-			//colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-			//colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
-			//colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachment.blendEnable = VK_TRUE;
+			colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+			colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+			colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
 			//TODO: Example
 
 			VkPipelineColorBlendStateCreateInfo colorBlending = {}; 
@@ -1301,6 +1301,7 @@ namespace Vulkan_Engine
 
 		void Window::CreateDescriptorSetLayout()
 		{
+			// uniform buffer layout binding
 			VkDescriptorSetLayoutBinding uboLayoutBinding = {}; // used to describe every binding 
 			uboLayoutBinding.binding = 0; // location of binding 
 			uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // binding a uniform buffer 
@@ -1308,10 +1309,21 @@ namespace Vulkan_Engine
 			uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // where in the pipeline is the descriptor being used (VK_SHADER_STAGE_ALL_GRAPHICS)
 			uboLayoutBinding.pImmutableSamplers = nullptr; //TODO: this is to do with image sampling 
 
+			// image sampler layout binding 
+			VkDescriptorSetLayoutBinding samplerLayoutBinding = {};
+			samplerLayoutBinding.binding = 1; // location 1, as ubo binding is in location 0
+			samplerLayoutBinding.descriptorCount = 1;
+			samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			samplerLayoutBinding.pImmutableSamplers = nullptr;
+			samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+			std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+
+			
 			VkDescriptorSetLayoutCreateInfo layoutInfo = {};
 			layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-			layoutInfo.bindingCount = 1;
-			layoutInfo.pBindings = &uboLayoutBinding;
+			layoutInfo.bindingCount = bindings.size();
+			layoutInfo.pBindings = bindings.data();
 
 			if (vkCreateDescriptorSetLayout(m_LogicalDevice, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS) 
 			{
@@ -1337,15 +1349,17 @@ namespace Vulkan_Engine
 		void Window::CreateDescriptorPool()
 		{
 			// define which descriptor types our sets contain & how many of them
-			VkDescriptorPoolSize poolSize = {};
-			poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			poolSize.descriptorCount = static_cast<uint32_t>(m_SwapChainImages.size());
-
+			std::array<VkDescriptorPoolSize, 2> poolSizes = {};
+			poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // pool 0 is for the uniform buffer
+			poolSizes[0].descriptorCount = static_cast<uint32_t>(m_SwapChainImages.size());
+			poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; // pool 1 is for the image sampler 
+			poolSizes[1].descriptorCount = static_cast<uint32_t>(m_SwapChainImages.size());
+			
 			// references the pool size 
 			VkDescriptorPoolCreateInfo poolInfo = {};
 			poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-			poolInfo.poolSizeCount = 1;
-			poolInfo.pPoolSizes = &poolSize;
+			poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+			poolInfo.pPoolSizes = poolSizes.data();
 			poolInfo.maxSets = static_cast<uint32_t>(m_SwapChainImages.size());; // max number of sets to be allocated
 
 			if (vkCreateDescriptorPool(m_LogicalDevice, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS)
@@ -1375,23 +1389,48 @@ namespace Vulkan_Engine
 
 			// populate every descriptor in pool created above
 			for (size_t i = 0; i < m_SwapChainImages.size(); i++) 
-			{
-				VkDescriptorBufferInfo bufferInfo = {};
+			{				
+				VkDescriptorBufferInfo bufferInfo = {}; // buffer info
 				bufferInfo.buffer = m_UniformBuffers[i];
 				bufferInfo.offset = 0;
 				bufferInfo.range = sizeof(UniformBuffer);
 
-				VkWriteDescriptorSet descriptorWrite = {};
-				descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-				descriptorWrite.dstSet = m_DescriptorSets[i]; // set to update
-				descriptorWrite.dstBinding = 0; // destination binding of set 
-				descriptorWrite.dstArrayElement = 0; // at which index to start from 
-				descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; 
-				descriptorWrite.descriptorCount = 1; // how many array elements to update
-				descriptorWrite.pBufferInfo = &bufferInfo; // buffer data
-				descriptorWrite.pImageInfo = nullptr; // image data
-				descriptorWrite.pTexelBufferView = nullptr; // buffer views
-				vkUpdateDescriptorSets(m_LogicalDevice, 1, &descriptorWrite, 0, nullptr);
+				VkDescriptorImageInfo imageInfo = {}; // image info 
+				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				imageInfo.imageView = m_TextureImageView;
+				imageInfo.sampler = m_TextureSampler;
+
+				std::array<VkWriteDescriptorSet, 2> descriptorWrites = {};
+
+				descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[0].dstSet = m_DescriptorSets[i];
+				descriptorWrites[0].dstBinding = 0;
+				descriptorWrites[0].dstArrayElement = 0;
+				descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				descriptorWrites[0].descriptorCount = 1;
+				descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+				descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				descriptorWrites[1].dstSet = m_DescriptorSets[i];
+				descriptorWrites[1].dstBinding = 1;
+				descriptorWrites[1].dstArrayElement = 0;
+				descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+				descriptorWrites[1].descriptorCount = 1;
+				descriptorWrites[1].pImageInfo = &imageInfo;
+
+				vkUpdateDescriptorSets(m_LogicalDevice, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+				
+				//VkWriteDescriptorSet descriptorWrite = {};
+				//descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+				//descriptorWrite.dstSet = m_DescriptorSets[i]; // set to update
+				//descriptorWrite.dstBinding = 0; // destination binding of set 
+				//descriptorWrite.dstArrayElement = 0; // at which index to start from 
+				//descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; 
+				//descriptorWrite.descriptorCount = 1; // how many array elements to update
+				//descriptorWrite.pBufferInfo = &bufferInfo; // buffer data
+				//descriptorWrite.pImageInfo = nullptr; // image data
+				//descriptorWrite.pTexelBufferView = nullptr; // buffer views
+				//vkUpdateDescriptorSets(m_LogicalDevice, 1, &descriptorWrite, 0, nullptr);
 			}
 		}
 
