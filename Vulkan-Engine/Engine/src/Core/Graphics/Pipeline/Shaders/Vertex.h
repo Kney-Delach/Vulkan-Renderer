@@ -73,6 +73,7 @@ namespace Vulkan_Engine
 	}
 }
 
+// https://en.cppreference.com/w/cpp/utility/hash
 namespace std
 {
 	template<> struct hash<Vulkan_Engine::Graphics::Vertex>
