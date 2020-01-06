@@ -125,13 +125,12 @@ namespace Vulkan_Engine
 			void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
 			void CreateTextureImageView();
 			void CreateTextureSampler();
-			VkImageView CreateImageView(VkImage image, VkFormat format);
+			VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 			// recording and executing command buffer abstractions 
 			VkCommandBuffer BeginSingleTimeCommands();
 			void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 			// depth buffer stuff
 			void CreateDepthResources();
-
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 

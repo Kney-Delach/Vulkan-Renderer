@@ -230,13 +230,13 @@ namespace Vulkan_Engine
 		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
 		{
 			//TODO: Figure out how to sync with vertical blank (without using FIFO)
-			for (const auto& availablePresentMode : availablePresentModes) 
-			{
-				if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) 
-				{
-					return availablePresentMode;
-				}
-			}
+			//for (const auto& availablePresentMode : availablePresentModes) 
+			//{
+			//	if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) 
+			//	{
+			//		return availablePresentMode;
+			//	}
+			//}
 			return VK_PRESENT_MODE_FIFO_KHR;
 		}
 
@@ -285,6 +285,43 @@ namespace Vulkan_Engine
 			}
 			throw std::runtime_error("Failed to find suitable memory type!");
 		}
-		
+
+		// depth buffer format stuff
+
+		VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features, VkPhysicalDevice& physicalDevice)
+		{
+			// linearTilingFeatures: Use cases that are supported with linear tiling
+			// optimalTilingFeatures : Use cases that are supported with optimal tiling
+			// bufferFeatures : Use cases that are supported for buffers
+			for (VkFormat format : candidates) 
+			{
+				VkFormatProperties props;
+				vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+
+				if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) 
+				{
+					return format;
+				}
+				else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) 
+				{
+					return format;
+				}
+
+				throw std::runtime_error("Failed to find supported format!");
+
+			}
+		}
+
+		VkFormat FindDepthFormat(VkPhysicalDevice& physicalDevice)
+		{
+			return FindSupportedFormat(
+				{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
+				VK_IMAGE_TILING_OPTIMAL,
+				VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, physicalDevice);
+		}
+
+		bool HasStencilComponent(VkFormat format) {
+			return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+		}
 	}
 }
