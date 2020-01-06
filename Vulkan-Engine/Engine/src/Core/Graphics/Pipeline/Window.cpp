@@ -20,6 +20,7 @@
 #include "Core/Graphics/Utility/VulkanUtility.h"
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -164,6 +165,7 @@ namespace Vulkan_Engine
 			CreateGraphicsPipeline();
 			CreateFramebuffers();
 			CreateCommandPool();
+			CreateDepthResources();
 			CreateTextureImage();
 			CreateTextureImageView();
 			CreateTextureSampler();
@@ -1733,6 +1735,11 @@ namespace Vulkan_Engine
 			vkQueueWaitIdle(m_GraphicsQueueHandle);
 
 			vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer);
+		}
+
+		void Window::CreateDepthResources()
+		{
+			
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------

@@ -129,6 +129,9 @@ namespace Vulkan_Engine
 			// recording and executing command buffer abstractions 
 			VkCommandBuffer BeginSingleTimeCommands();
 			void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+			// depth buffer stuff
+			void CreateDepthResources();
+
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -173,16 +176,22 @@ namespace Vulkan_Engine
 			// quad vertices using an index buffer 
 			const std::vector<Vertex> m_Vertices = 
 			{
-				{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-				{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-				{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-				{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+				{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+				{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+				{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+				{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+				{ {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+				{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+				{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+				{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 			};
 			VkBuffer m_VertexBuffer; // does not depend on swap chain 
 			VkDeviceMemory m_VertexBufferMemory; // stores handle to buffer memory
 			const std::vector<uint16_t> m_Indices =
 			{
-				0, 1, 2, 2, 3, 0
+				0, 1, 2, 2, 3, 0,
+				4, 5, 6, 6, 7, 4
 			};
 			VkBuffer m_IndexBuffer; // handle to index buffer 
 			VkDeviceMemory m_IndexBufferMemory;  // handle to index memory
@@ -195,6 +204,10 @@ namespace Vulkan_Engine
 			VkDeviceMemory m_TextureImageMemory;
 			VkImageView m_TextureImageView;
 			VkSampler m_TextureSampler;
+			// depth buffer data
+			VkImage m_DepthImage;
+			VkDeviceMemory m_DepthImageMemory;
+			VkImageView m_DepthImageView;
 		};
 	}
 }

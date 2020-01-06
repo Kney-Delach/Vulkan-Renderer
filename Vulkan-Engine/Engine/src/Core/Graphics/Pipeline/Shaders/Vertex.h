@@ -12,7 +12,8 @@ namespace Vulkan_Engine
 	{
 		struct Vertex
 		{
-			glm::vec2 Position;
+			//TODO: Change the format type depending on size of types in struct
+			glm::vec3 Position; 
 			glm::vec3 Color;
 			glm::vec2 TexCoord;
 
@@ -45,7 +46,7 @@ namespace Vulkan_Engine
 				// ivec2  : VK_FORMAT_R32G32_SINT,       a 2-component vector of 32-bit signed integers
 				// uvec4  : VK_FORMAT_R32G32B32A32_UINT, a 4 - component vector of 32 - bit unsigned integers
 				// double : VK_FORMAT_R64_SFLOAT,        a double - precision(64 - bit) float
-				attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT; // byte size of attribute data 
+				attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // byte size of attribute data 
 				attributeDescriptions[0].offset = offsetof(Vertex, Position); // number of bytes since start of per-vertex data to read from
 
 				// color attribute per-vertex description
