@@ -42,7 +42,9 @@ project "Engine"
 		"%{prj.name}/src/**.h",
 		"%{prj.name}/src/**.cpp",
 		"%{prj.name}/Dependencies/glm/glm/**.hpp",
-		"%{prj.name}/Dependencies/glm/glm/**.inl"
+		"%{prj.name}/Dependencies/glm/glm/**.inl",
+		"%{prj.name}/Dependencies/TOL/**.h"
+
 		-- "Resources/Shaders/**.spv"
 	}
 
@@ -59,7 +61,9 @@ project "Engine"
 		"%{IncludeDir.glm}",
 		"C:/VulkanSDK/1.1.130.0/Include",
 		"%{prj.name}/Resources/",
-		"%{prj.name}/Dependencies/STB/include"
+		"%{prj.name}/Dependencies/STB/include",
+		"%{prj.name}/Dependencies/TOL"
+
 	}
 
 	libdirs 

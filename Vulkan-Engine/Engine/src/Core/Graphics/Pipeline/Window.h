@@ -131,6 +131,8 @@ namespace Vulkan_Engine
 			void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 			// depth buffer stuff
 			void CreateDepthResources();
+			// load model
+			void LoadModel();
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -172,26 +174,28 @@ namespace Vulkan_Engine
 			//	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
 			//	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 			//};
-			// quad vertices using an index buffer 
-			const std::vector<Vertex> m_Vertices = 
-			{
-				{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-				{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-				{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-				{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+			// quad vertices using an index buffer
+			//TODO: Removed basic square vertices
+			//const std::vector<Vertex> m_Vertices = 
+			//{
+			//	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+			//	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+			//	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+			//	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
 
-				{ {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-				{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-				{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-				{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-			};
+			//	{ {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+			//	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+			//	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+			//	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+			//};
 			VkBuffer m_VertexBuffer; // does not depend on swap chain 
 			VkDeviceMemory m_VertexBufferMemory; // stores handle to buffer memory
-			const std::vector<uint16_t> m_Indices =
-			{
-				0, 1, 2, 2, 3, 0,
-				4, 5, 6, 6, 7, 4
-			};
+			//TODO: Removed basic square indices
+			//const std::vector<uint16_t> m_Indices =
+			//{
+			//	0, 1, 2, 2, 3, 0,
+			//	4, 5, 6, 6, 7, 4
+			//};
 			VkBuffer m_IndexBuffer; // handle to index buffer 
 			VkDeviceMemory m_IndexBufferMemory;  // handle to index memory
 			std::vector<VkBuffer> m_UniformBuffers;
@@ -207,6 +211,9 @@ namespace Vulkan_Engine
 			VkImage m_DepthImage;
 			VkDeviceMemory m_DepthImageMemory;
 			VkImageView m_DepthImageView;
+			// model loading
+			std::vector<Vertex> m_Vertices;
+			std::vector<uint32_t> m_Indices;
 		};
 	}
 }

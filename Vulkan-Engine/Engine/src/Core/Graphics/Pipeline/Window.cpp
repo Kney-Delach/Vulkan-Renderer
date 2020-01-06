@@ -29,6 +29,15 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
+const int WIDTH = 800;
+const int HEIGHT = 600;
+
+const std::string MODEL_PATH = "../Resources/Models/chalet.obj";
+const std::string TEXTURE_PATH = "../Resources/Textures/chalet.jpg";
+
 const int MAX_FRAMES_IN_FLIGHT = 2; // number of frames that should be processed concurrently 
 
 namespace Vulkan_Engine
@@ -169,6 +178,7 @@ namespace Vulkan_Engine
 			CreateTextureImage();
 			CreateTextureImageView();
 			CreateTextureSampler();
+			LoadModel();
 			CreateVertexBuffer(); // vertex buffer creation
 			CreateIndexBuffer(); // index buffer creation
 			CreateUniformBuffers(); // uniform buffer creation
@@ -969,7 +979,7 @@ namespace Vulkan_Engine
 				VkDeviceSize offsets[] = { 0 };
 				vkCmdBindVertexBuffers(m_CommandBuffers[i], 0, 1, vertexBuffers, offsets); // binds vertex buffer to bindings
 				vkCmdBindDescriptorSets(m_CommandBuffers[i], VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[i], 0, nullptr);
-				vkCmdBindIndexBuffer(m_CommandBuffers[i], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT16); 
+				vkCmdBindIndexBuffer(m_CommandBuffers[i], m_IndexBuffer, 0, VK_INDEX_TYPE_UINT32);  //TODO: Change this depending on number of indices
 
 				// This draws primitive vertices 
 				//vkCmdDraw(m_CommandBuffers[i], static_cast<uint32_t>(m_Vertices.size()), 1, 0, 0); 
@@ -1500,7 +1510,7 @@ namespace Vulkan_Engine
 		{
 			// load image data from file using stbi 
 			int texWidth, texHeight, texChannels;
-			stbi_uc* pixels = stbi_load("../Resources/Textures/tex.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+			stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 			VkDeviceSize imageSize = texWidth * texHeight * 4; //TODO: Deal with this isue 
 
 			if (!pixels) 
@@ -1783,6 +1793,55 @@ namespace Vulkan_Engine
 			VkFormat depthFormat = FindDepthFormat(m_PhysicalDevice);
 			CreateImage(m_SwapChainExtent.width, m_SwapChainExtent.height, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_DepthImage, m_DepthImageMemory);
 			m_DepthImageView = CreateImageView(m_DepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+		}
+
+		void Window::LoadModel()
+		{
+			tinyobj::attrib_t attrib;
+			std::vector<tinyobj::shape_t> shapes;
+			std::vector<tinyobj::material_t> materials;
+			std::string warn, err;
+
+			if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH.c_str())) 
+			{
+				VK_CORE_CRITICAL("{0}, {1}",warn.c_str(), err.c_str());
+				throw std::runtime_error(warn + err);
+			}
+
+			std::unordered_map<Vertex, uint32_t> uniqueVertices = {};
+
+			for (const auto& shape : shapes) 
+			{
+				for (const auto& index : shape.mesh.indices) {
+					Vertex vertex = {};
+
+					vertex.Position =
+					{
+					attrib.vertices[3 * index.vertex_index + 0],
+					attrib.vertices[3 * index.vertex_index + 1],
+					attrib.vertices[3 * index.vertex_index + 2]
+					};
+
+					vertex.TexCoord =
+					{
+						attrib.texcoords[2 * index.texcoord_index + 0],
+						1.0f - attrib.texcoords[2 * index.texcoord_index + 1] // flipping this as vulkan expects orientation where 0 means top of image
+					};
+
+					vertex.Color = { 1.0f, 1.0f, 1.0f };
+					
+					//m_Vertices.push_back(vertex); // assuming every vertex is unique
+
+					if (uniqueVertices.count(vertex) == 0)  // check if a vertex exists in our map
+					{
+						uniqueVertices[vertex] = static_cast<uint32_t>(m_Vertices.size());
+						m_Vertices.push_back(vertex); // only add the vertex if its unique
+					}
+
+					m_Indices.push_back(uniqueVertices[vertex]);
+					//m_Indices.push_back(m_Indices.size());
+				}
+			}
 		}
 
 		// ------------------------------ GLFW Settings ------------------------------
