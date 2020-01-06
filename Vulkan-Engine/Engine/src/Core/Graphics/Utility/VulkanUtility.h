@@ -176,19 +176,24 @@ namespace Vulkan_Engine
 		}
 
 		bool IsGraphicsVulkanCompatible(VkPhysicalDevice device, VkSurfaceKHR& surface)
-		{			
+		{
 			const QueueFamilyIndices indices = FindQueueFamilies(device, surface);
 			const bool extensionsSupported = CheckDeviceExtensionSupport(device);
 
+			VkPhysicalDeviceFeatures supportedFeatures;
+			vkGetPhysicalDeviceFeatures(device, &supportedFeatures); // query for supported hardware features 
+
 			bool swapChainAdequate = false;
-			if (extensionsSupported) 
+			if (extensionsSupported)
 			{
 				//TODO: Currently only require at least a single supported image format and a single supported presentation mode 
 				const SwapChainSupportDetails swapChainSupport = QuerySwapChainSupport(device, surface);
 				swapChainAdequate = !swapChainSupport.Formats.empty() && !swapChainSupport.PresentModes.empty();
 			}
-			return indices.IsComplete() && extensionsSupported && swapChainAdequate;
+			return indices.IsComplete() && extensionsSupported && swapChainAdequate && supportedFeatures.samplerAnisotropy;
 		}
+		
+		
 
 		// ------------------------ Functions to create the best possible swap chain ------------------------  //
 		// 3 settings
@@ -224,13 +229,14 @@ namespace Vulkan_Engine
 		// 4. MAILBOX (Best->Triple buffering capabilities.... No queue bottleneck)
 		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
 		{
-			for (const auto& availablePresentMode : availablePresentModes) 
-			{
-				if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) 
-				{
-					return availablePresentMode;
-				}
-			}
+			//TODO: Figure out how to sync with vertical blank (without using FIFO)
+			//for (const auto& availablePresentMode : availablePresentModes) 
+			//{
+			//	if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) 
+			//	{
+			//		return availablePresentMode;
+			//	}
+			//}
 			return VK_PRESENT_MODE_FIFO_KHR;
 		}
 
@@ -279,6 +285,43 @@ namespace Vulkan_Engine
 			}
 			throw std::runtime_error("Failed to find suitable memory type!");
 		}
-		
+
+		// depth buffer format stuff
+
+		VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features, VkPhysicalDevice& physicalDevice)
+		{
+			// linearTilingFeatures: Use cases that are supported with linear tiling
+			// optimalTilingFeatures : Use cases that are supported with optimal tiling
+			// bufferFeatures : Use cases that are supported for buffers
+			for (VkFormat format : candidates) 
+			{
+				VkFormatProperties props;
+				vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+
+				if (tiling == VK_IMAGE_TILING_LINEAR && (props.linearTilingFeatures & features) == features) 
+				{
+					return format;
+				}
+				else if (tiling == VK_IMAGE_TILING_OPTIMAL && (props.optimalTilingFeatures & features) == features) 
+				{
+					return format;
+				}
+
+				throw std::runtime_error("Failed to find supported format!");
+
+			}
+		}
+
+		VkFormat FindDepthFormat(VkPhysicalDevice& physicalDevice)
+		{
+			return FindSupportedFormat(
+				{ VK_FORMAT_D32_SFLOAT, VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT },
+				VK_IMAGE_TILING_OPTIMAL,
+				VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT, physicalDevice);
+		}
+
+		bool HasStencilComponent(VkFormat format) {
+			return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
+		}
 	}
 }

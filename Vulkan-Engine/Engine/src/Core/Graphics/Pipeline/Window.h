@@ -22,6 +22,7 @@
 
 #include "Shaders/Shader.h"
 #include "Shaders/Vertex.h"
+#include "Shaders/UniformBuffer.h"
 
 namespace Vulkan_Engine
 {
@@ -94,7 +95,7 @@ namespace Vulkan_Engine
 			void CreateCommandBuffers();
 			///////////////////////////////
 			void CreateSyncObjects();
-			void RenderFrame();
+			void RenderFrame(const Timestep deltaTime);
 			///////////////////////////////
 			//// Everything that has to do with swap chain recreation
 			///////////////////////////////
@@ -107,6 +108,31 @@ namespace Vulkan_Engine
 			void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory); // abstracted buffer creation function 
 			void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 			void CreateIndexBuffer();
+			///////////////////////////////
+			// Descriptor layouts (uniform buffers)
+			///////////////////////////////
+			void CreateDescriptorSetLayout();
+			void CreateUniformBuffers();
+			void CreateDescriptorPool();
+			void CreateDescriptorSets();
+			void UpdateUniformBuffer(uint32_t imageIndex, const Timestep deltaTime);
+			///////////////////////////////
+			// Texture Mapping 
+			///////////////////////////////
+			void CreateTextureImage();
+			void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+			void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+			void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+			void CreateTextureImageView();
+			void CreateTextureSampler();
+			VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+			// recording and executing command buffer abstractions 
+			VkCommandBuffer BeginSingleTimeCommands();
+			void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+			// depth buffer stuff
+			void CreateDepthResources();
+			// load model
+			void LoadModel();
 		private:
 			//todo: abstract the window, and vk instances / device into a structure of rendering context
 			// glfw and mindow variables 
@@ -126,6 +152,7 @@ namespace Vulkan_Engine
 			VkFormat m_SwapChainImageFormat;
 			VkExtent2D m_SwapChainExtent;
 			VkRenderPass m_RenderPass;
+			VkDescriptorSetLayout m_DescriptorSetLayout; // descriptor set layout (combines all descriptor bindings)
 			VkPipelineLayout m_PipelineLayout;
 			VkPipeline m_GraphicsPipeline;
 			std::vector<VkFramebuffer> m_SwapChainFramebuffers;
@@ -147,22 +174,46 @@ namespace Vulkan_Engine
 			//	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
 			//	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
 			//};
-			// quad vertices using an index buffer 
-			const std::vector<Vertex> m_Vertices = 
-			{
-				{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-				{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-				{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-				{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
-			};
+			// quad vertices using an index buffer
+			//TODO: Removed basic square vertices
+			//const std::vector<Vertex> m_Vertices = 
+			//{
+			//	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+			//	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+			//	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+			//	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+			//	{ {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+			//	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+			//	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+			//	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+			//};
 			VkBuffer m_VertexBuffer; // does not depend on swap chain 
 			VkDeviceMemory m_VertexBufferMemory; // stores handle to buffer memory
-			const std::vector<uint16_t> m_Indices =
-			{
-				0, 1, 2, 2, 3, 0
-			};
+			//TODO: Removed basic square indices
+			//const std::vector<uint16_t> m_Indices =
+			//{
+			//	0, 1, 2, 2, 3, 0,
+			//	4, 5, 6, 6, 7, 4
+			//};
 			VkBuffer m_IndexBuffer; // handle to index buffer 
 			VkDeviceMemory m_IndexBufferMemory;  // handle to index memory
+			std::vector<VkBuffer> m_UniformBuffers;
+			std::vector<VkDeviceMemory> m_UniformBuffersMemory;
+			VkDescriptorPool m_DescriptorPool;
+			std::vector<VkDescriptorSet> m_DescriptorSets;
+			// texture mapping stuff
+			VkImage m_TextureImage;
+			VkDeviceMemory m_TextureImageMemory;
+			VkImageView m_TextureImageView;
+			VkSampler m_TextureSampler;
+			// depth buffer data
+			VkImage m_DepthImage;
+			VkDeviceMemory m_DepthImageMemory;
+			VkImageView m_DepthImageView;
+			// model loading
+			std::vector<Vertex> m_Vertices;
+			std::vector<uint32_t> m_Indices;
 		};
 	}
 }
