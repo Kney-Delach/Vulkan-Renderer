@@ -230,13 +230,13 @@ namespace Vulkan_Engine
 		VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes)
 		{
 			//TODO: Figure out how to sync with vertical blank (without using FIFO)
-			//for (const auto& availablePresentMode : availablePresentModes) 
-			//{
-			//	if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) 
-			//	{
-			//		return availablePresentMode;
-			//	}
-			//}
+			for (const auto& availablePresentMode : availablePresentModes) 
+			{
+				if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) 
+				{
+					return availablePresentMode;
+				}
+			}
 			return VK_PRESENT_MODE_FIFO_KHR;
 		}
 
