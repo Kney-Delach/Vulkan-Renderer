@@ -32,7 +32,8 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-#define ROTATION_MULTIPLIER 2.25f
+#define ROTATION_MULTIPLIER 1.f
+
 
 const int WIDTH = 800;
 const int HEIGHT = 600;
@@ -181,7 +182,9 @@ namespace Vulkan_Engine
 			CreateTextureImage();
 			CreateTextureImageView();
 			CreateTextureSampler();
+#if LOAD_MODEL
 			LoadModel();
+#endif
 			CreateVertexBuffer(); // vertex buffer creation
 			CreateIndexBuffer(); // index buffer creation
 			CreateUniformBuffers(); // uniform buffer creation
@@ -1523,7 +1526,7 @@ namespace Vulkan_Engine
 			const auto currentTime = std::chrono::high_resolution_clock::now();
 			const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 			UniformBuffer ubo = {};
-			ubo.Model = glm::rotate(glm::mat4(1.0f), ROTATION_MULTIPLIER * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+			ubo.Model = glm::rotate(glm::mat4(1.0f), time * ROTATION_MULTIPLIER * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 			ubo.View = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 			ubo.Projection = glm::perspective(glm::radians(45.0f), float(m_WindowData.Properties.Width) / float(m_WindowData.Properties.Height), 0.1f, 10.0f);
 			ubo.Projection[1][1] *= -1;
@@ -1854,15 +1857,22 @@ namespace Vulkan_Engine
 					1, &blit,
 					VK_FILTER_LINEAR); // VkFilter, same filtering options as in sampler (linear enables interpolation)
 
+				barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+				barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+				barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+				vkCmdPipelineBarrier(commandBuffer,
+					VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+					0, nullptr,
+					0, nullptr,
+					1, &barrier);
+				
 				// verify dimensions are never 0
 				if (mipWidth > 1) mipWidth /= 2;
 				if (mipHeight > 1) mipHeight /= 2;
 			}
 
-			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 			barrier.subresourceRange.baseMipLevel = mipLevels - 1;
 			barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 			barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1920,7 +1930,7 @@ namespace Vulkan_Engine
 			CreateImage(m_SwapChainExtent.width, m_SwapChainExtent.height,1, m_MsaaSamples, depthFormat, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_DepthImage, m_DepthImageMemory);
 			m_DepthImageView = CreateImageView(m_DepthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 		}
-
+#if LOAD_MODEL
 		void Window::LoadModel()
 		{
 			tinyobj::attrib_t attrib;
@@ -1969,7 +1979,8 @@ namespace Vulkan_Engine
 				}
 			}
 		}
-
+#endif
+		
 		VkSampleCountFlagBits Window::GetMaxUsableSampleCount()
 		{
 			VkPhysicalDeviceProperties physicalDeviceProperties;

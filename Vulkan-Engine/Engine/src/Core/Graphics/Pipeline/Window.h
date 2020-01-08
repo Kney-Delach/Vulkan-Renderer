@@ -24,6 +24,8 @@
 #include "Shaders/Vertex.h"
 #include "Shaders/UniformBuffer.h"
 
+#define LOAD_MODEL 0
+
 namespace Vulkan_Engine
 {
 	class WindowResizeEvent;
@@ -133,8 +135,6 @@ namespace Vulkan_Engine
 			void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 			// depth buffer stuff
 			void CreateDepthResources();
-			// load model
-			void LoadModel();
 			// msaa utility functions
 			VkSampleCountFlagBits GetMaxUsableSampleCount();
 			void CreateColorResources(); 
@@ -169,38 +169,33 @@ namespace Vulkan_Engine
 			std::vector<VkFence> m_InFlightFences; // used for cpu <-> gpu synchronization
 			std::vector<VkFence> m_ImagesInFlight; // used to track for each swap chain image, if a frame in flight is currently using it
 			size_t m_CurrentFrame = 0; // frame index used to keep track of the current frame for correct semaphore usage
-			//////////////////////////////////////////////////
-			//// Vertex buffer related variables
-			////TODO: Abstract this data as in Exalted.
-			//////////////////////////////////////////////////
-			//inline static const std::vector<Vertex> m_TriangleVertices = 
-			//{
-			//	{{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-			//	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-			//	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
-			//};
-			// quad vertices using an index buffer
-			//TODO: Removed basic square vertices
-			//const std::vector<Vertex> m_Vertices = 
-			//{
-			//	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-			//	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-			//	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-			//	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+#if LOAD_MODEL
+			// model loading
+			std::vector<Vertex> m_Vertices;
+			std::vector<uint32_t> m_Indices;
+			// load model function
+			void LoadModel();
+#else
+			const std::vector<Vertex> m_Vertices = 
+			{
+				{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+				{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+				{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+				{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
 
-			//	{ {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-			//	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-			//	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-			//	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-			//};
+				{ {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+				{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+				{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+				{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
+			};
+			const std::vector<uint32_t> m_Indices = // now 32 to fit with model 
+			{
+				0, 1, 2, 2, 3, 0,
+				4, 5, 6, 6, 7, 4
+			};
+#endif
 			VkBuffer m_VertexBuffer; // does not depend on swap chain 
 			VkDeviceMemory m_VertexBufferMemory; // stores handle to buffer memory
-			//TODO: Removed basic square indices
-			//const std::vector<uint16_t> m_Indices =
-			//{
-			//	0, 1, 2, 2, 3, 0,
-			//	4, 5, 6, 6, 7, 4
-			//};
 			VkBuffer m_IndexBuffer; // handle to index buffer 
 			VkDeviceMemory m_IndexBufferMemory;  // handle to index memory
 			std::vector<VkBuffer> m_UniformBuffers;
@@ -218,9 +213,7 @@ namespace Vulkan_Engine
 			VkImage m_DepthImage;
 			VkDeviceMemory m_DepthImageMemory;
 			VkImageView m_DepthImageView;
-			// model loading
-			std::vector<Vertex> m_Vertices;
-			std::vector<uint32_t> m_Indices;
+
 			// multisampling variables (use the image, memory and view to sample the data in an off screen buffer)
 			VkSampleCountFlagBits m_MsaaSamples;
 			VkImage m_ColorImage;
