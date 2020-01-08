@@ -20,9 +20,10 @@
 
 #include "Core/Events/Event.h"
 
-#include "Shaders/Shader.h"
-#include "Shaders/Vertex.h"
-#include "Shaders/UniformBuffer.h"
+#include "Renderer/Shader.h"
+
+#include "Memory/Mesh/Vertex.h"
+#include "Memory/MVP.h"
 
 #define LOAD_MODEL 0
 

@@ -13,10 +13,10 @@
  /___\ /___\
 ***************************************************************************/
 #include "vkepch.h"
+
 #include "Shader.h"
 
 #include "Core/Logger/Log.h"
-#include "Core/IO/FileHandler.h" // <fstream> TODO: abstract shader loading to load through file handler 
 
 namespace Vulkan_Engine
 {

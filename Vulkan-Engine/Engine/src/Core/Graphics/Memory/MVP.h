@@ -21,14 +21,14 @@ namespace Vulkan_Engine
 {
 	namespace Graphics
 	{
-		struct UniformBuffer
+		struct MVP
 		{
 			alignas(16) glm::mat4 Model;
 			alignas(16) glm::mat4 View;
 			alignas(16) glm::mat4 Projection;
 		public:
-			UniformBuffer() = default;
-			~UniformBuffer() = default;
+			MVP() = default;
+			~MVP() = default;
 		};
 	}
 }

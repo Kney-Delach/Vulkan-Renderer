@@ -15,9 +15,9 @@
 #include "vkepch.h"
 #include "Window.h"
 #include "Core/Logger/Log.h"
-#include "Core/Timers/Timestep.h"
+#include "Core/Utils/Timestep.h"
 #include "Core/Events/ApplicationEvent.h"
-#include "Core/Graphics/Utility/VulkanUtility.h"
+#include "Core/Graphics/Core/Utility/VulkanUtility.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -1418,9 +1418,10 @@ namespace Vulkan_Engine
 			}
 		}
 
+		//TODO: Abstract this
 		void Window::CreateUniformBuffers()
 		{
-			const VkDeviceSize bufferSize = sizeof(UniformBuffer);
+			const VkDeviceSize bufferSize = sizeof(MVP); 
 			
 			m_UniformBuffers.resize(m_SwapChainImages.size());
 			m_UniformBuffersMemory.resize(m_SwapChainImages.size());
@@ -1478,7 +1479,7 @@ namespace Vulkan_Engine
 				VkDescriptorBufferInfo bufferInfo = {}; // buffer info
 				bufferInfo.buffer = m_UniformBuffers[i];
 				bufferInfo.offset = 0;
-				bufferInfo.range = sizeof(UniformBuffer);
+				bufferInfo.range = sizeof(MVP); //todo: make this a ubo
 
 				VkDescriptorImageInfo imageInfo = {}; // image info 
 				imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -1525,7 +1526,7 @@ namespace Vulkan_Engine
 
 			const auto currentTime = std::chrono::high_resolution_clock::now();
 			const float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-			UniformBuffer ubo = {};
+			MVP ubo = {};
 			ubo.Model = glm::rotate(glm::mat4(1.0f), time * ROTATION_MULTIPLIER * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 			ubo.View = glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
 			ubo.Projection = glm::perspective(glm::radians(45.0f), float(m_WindowData.Properties.Width) / float(m_WindowData.Properties.Height), 0.1f, 10.0f);

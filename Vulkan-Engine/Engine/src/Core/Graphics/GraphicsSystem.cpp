@@ -1,9 +1,9 @@
 #include "vkepch.h"
 #include "GraphicsSystem.h"
 
-#include "Pipeline/Window.h"
+#include "Window.h"
 #include "Core/Logger/Log.h"
-#include "Core/Timers/Timestep.h"
+#include "Core/Utils/Timestep.h"
 
 namespace Vulkan_Engine
 {
