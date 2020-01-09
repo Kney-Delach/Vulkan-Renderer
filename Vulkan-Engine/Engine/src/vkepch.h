@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <functional>
 #include <set>
+#include <map>
 
 #include <fstream>
 #include <string>

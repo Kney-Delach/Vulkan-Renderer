@@ -140,6 +140,16 @@ namespace Vulkan_Engine
 			return new LogicalDevice(this, logicalDevice, graphicsDetails, surfaceCapabilities, m_QueueFamilyIndices, m_QueueHandles);
 		}
 
+		VkPhysicalDevice PhysicalDevice::GetPhysicalDevice() const
+		{
+			return m_Device;
+		}
+
+		const VkPhysicalDeviceLimits& PhysicalDevice::GetDeviceLimits() const
+		{
+			return m_Properties.limits;
+		}
+
 		std::vector<VkDeviceQueueCreateInfo> PhysicalDevice::GetQueueCreateInfos(const float* queuePriority)
 		{
 			VKE_CORE_ASSERT(queuePriority != nullptr, "Queue priority must have a valid pointer!");

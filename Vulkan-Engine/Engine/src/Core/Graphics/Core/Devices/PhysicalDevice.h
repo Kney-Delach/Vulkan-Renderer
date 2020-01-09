@@ -29,13 +29,14 @@ namespace Vulkan_Engine
 			~PhysicalDevice() = default;
 			bool IsCompatible(DeviceSurfaceCapabilities& surfaceCapabilities, VkSurfaceKHR& surface);
 			LogicalDevice* CreateLogicalDevice(const WindowGraphicsDetails& graphicsDetails, DeviceSurfaceCapabilities& surfaceCapabilities, uint32_t enabledLayerCount, const char* const* enabledLayerNames);
+			VkPhysicalDevice GetPhysicalDevice() const;
+			const VkPhysicalDeviceLimits& GetDeviceLimits() const;
 		private:
 			bool FindQueueFamilies(VkPhysicalDevice& device, VkSurfaceKHR& surface);
 			bool HasRequiredQueueFamilies();
 			bool HasRequiredExtensions(DeviceSurfaceCapabilities& surfaceCapabilities, VkSurfaceKHR& surface);
 			std::vector<VkDeviceQueueCreateInfo> GetQueueCreateInfos(const float* queuePriority);
 			VkQueue CreateQueueHandle(VkDevice logicalDevice, QueueFamilyType type);
-
 		private:
 			VkPhysicalDevice m_Device;
 			VkPhysicalDeviceFeatures m_Features;

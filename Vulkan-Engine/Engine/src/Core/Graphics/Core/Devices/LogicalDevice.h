@@ -10,6 +10,7 @@ namespace Vulkan_Engine
 		class Window;
 		class PhysicalDevice;
 		class Descriptor;
+		class DeviceMemory;
 
 		// forward declarations: structs
 		struct WindowGraphicsDetails;
@@ -38,7 +39,7 @@ namespace Vulkan_Engine
 			//VkDevice GetLogicalDevice() const;
 			//VkPhysicalDevice GetPhysicalDevice() const;
 			//const uint32_t GetFamilyIndex(QueueFamilyType type) const;
-			//VkQueue GetQueueHandle(QueueFamilyType type) const;
+			VkQueue GetQueueHandle(QueueFamilyType type) const;
 			//const bool SupportsOptionalExtension(OptionalExtensions ext) const;
 			//VkCommandBuffer GetComputeCommandBuffer() const;
 			//Descriptor* GetPrimaryDescriptor() const;
@@ -51,18 +52,21 @@ namespace Vulkan_Engine
 			// Each command pool can only allocate command buffers that are submitted on a single type of queue.
 			void CreateCommandPools(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags, VkCommandPool* commandPool) const;
 			void CreateCommandBuffers(std::vector<VkCommandBuffer>& buffers, VkCommandPool pool, uint32_t count, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY) const;
+			void CreateGraphicsDescriptor();
+			void LoadDescriptorData(std::vector<std::pair<VkDescriptorType, uint32_t>>& descriptorTypes, uint32_t& setCount);
+
 		private:
 			VkDevice m_Device;
 			VkCommandPool m_GraphicsCommandPool;
 			VkCommandPool m_ComputeCommandPool;
 			std::vector<VkCommandBuffer> m_GraphicsCommandBuffers;
 			std::vector<VkCommandBuffer> m_ComputeCommandBuffers;
-			
-			PhysicalDevice* m_PhysicalDevice; // Holds physical device so only this object needs to be passed around
 			std::vector<uint32_t> m_QueueFamilyIndices; // use QueueFamilyType to index these 
 			std::vector<VkQueue> m_QueueHandles;  // store handle to graphics and presentation queues
-
-			Descriptor* m_Descriptor;
+			
+			PhysicalDevice* m_PhysicalDevice; // Holds physical device so only this object needs to be passed around
+			Descriptor* m_GraphicsDescriptor;
+			DeviceMemory* m_DeviceMemory;
 		};
 	}
 }
@@ -71,4 +75,3 @@ namespace Vulkan_Engine
 // - level: specifies if the allocated command buffers are primary or secondary command buffers.
 // -|- VK_COMMAND_BUFFER_LEVEL_PRIMARY   : Can be submitted to a queue for execution, but cannot be called from other command buffers.
 // -|- VK_COMMAND_BUFFER_LEVEL_SECONDARY : Cannot be submitted directly, but can be called from primary command buffers. (helpful to reuse common operations from primary command buffers.)
-
