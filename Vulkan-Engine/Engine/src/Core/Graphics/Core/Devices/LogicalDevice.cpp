@@ -98,5 +98,15 @@ namespace Vulkan_Engine
 			VKE_CORE_ASSERT(type != QueueFamilyType::ENUM_SIZE, "Cannot get queue handle to invalid queue family type.");
 			return m_QueueHandles[static_cast<size_t>(type)];
 		}
+
+		DeviceMemory* LogicalDevice::GetDeviceMemory() const
+		{
+			return m_DeviceMemory;
+		}
+
+		Descriptor* LogicalDevice::GetGraphicsDescriptor() const
+		{
+			return m_GraphicsDescriptor;
+		}
 	}
 }

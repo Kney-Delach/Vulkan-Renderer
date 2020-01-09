@@ -25,7 +25,8 @@ namespace Vulkan_Engine
 		class Validation;
 		class PhysicalDevice;
 		class LogicalDevice;
-
+		class TextureManager; //TOOD: Move this from here? 
+		
 		// forward declaration: structs
 		struct DeviceSurfaceCapabilities;
 		
@@ -65,7 +66,8 @@ namespace Vulkan_Engine
 			void CreateVulkanDevices(DeviceSurfaceCapabilities& surfaceCapabilities, uint32_t& enabledLayerCount, const char* const*& enabledLayerNames);
 		private: // private variables
 			WindowGraphicsDetails m_GraphicsDetails;
-			Validation* m_ValidationLayer; 
+			Validation* m_ValidationLayer;
+			TextureManager* m_TextureManager; 
 		public: // constructor + destructor
 			Window();
 			~Window();

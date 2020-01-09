@@ -12,10 +12,13 @@
 #include "Core/Events/ApplicationEvent.h"
 
 // Graphics includes
+// core
 #include "Core/Graphics/Core/Utility/Validation.h"
 #include "Core/Graphics/Core/Utility/VulkanUtility.h"
 #include "Core/Graphics/Core/Devices/PhysicalDevice.h"
 #include "Core/Graphics/Core/Devices/LogicalDevice.h"
+// memory
+#include "Core/Graphics/Memory/Texture/TextureManager.h"
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -32,7 +35,6 @@
 #include "Core/Graphics/Memory/MVP.h"
 
 #define ROTATION_MULTIPLIER 1.f
-
 
 
 const int WIDTH = 800;
@@ -55,7 +57,6 @@ namespace Vulkan_Engine
 
 		Window::~Window()
 		{
-			VKE_SAFE_DELETE(m_ValidationLayer)
 		}
 
 		void Window::InitWindow()
@@ -81,6 +82,10 @@ namespace Vulkan_Engine
 			// initialize vulkan physical & logical devices
 			DeviceSurfaceCapabilities surfaceCapabilities;
 			CreateVulkanDevices(surfaceCapabilities, enabledLayerCount, enabledLayerNames);
+			// initialize texture manager
+			//TODO: Initialize descriptor indexing here SupportsOptionalExtension(OptionalExtensions::DescriptorIndexing));
+			m_TextureManager = new TextureManager(m_GraphicsDetails.LogicalDevice, m_GraphicsDetails.PhysicalDevice->GetDeviceLimits().maxSamplerAllocationCount, false);
+
 		}
 
 		// ------------------------------------------------------------------------------------------------------
@@ -230,38 +235,39 @@ namespace Vulkan_Engine
 
 		void Window::Cleanup()
 		{
-			vkDeviceWaitIdle(m_LogicalDevice); // wait for operations in a specific command queue to be finished
-
-			CleanupSwapChain();
-
-			vkDestroySampler(m_LogicalDevice, m_TextureSampler, nullptr); // destroy texture sampler
-			vkDestroyImageView(m_LogicalDevice, m_TextureImageView, nullptr); // destroy image views
-			vkDestroyImage(m_LogicalDevice, m_TextureImage, nullptr); // destroy image 
-			vkFreeMemory(m_LogicalDevice, m_TextureImageMemory, nullptr); // destroy image memory 
-
-			vkDestroyDescriptorSetLayout(m_LogicalDevice, m_DescriptorSetLayout, nullptr);
-			// clean up descriptor binding sets
-			vkDestroyBuffer(m_LogicalDevice, m_IndexBuffer, nullptr); // destroy index buffer
-			vkFreeMemory(m_LogicalDevice, m_IndexBufferMemory, nullptr); // free memory assigned to index buffer 
-			vkDestroyBuffer(m_LogicalDevice, m_VertexBuffer, nullptr); // destroy the vertex buffer
-			vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr); // free the memory assigned to the buffer 			
-			for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-			{
-				vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphores[i], nullptr);
-				// clean up render semaphore
-				vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphores[i], nullptr);
-				// clean up image semaphore 
-				vkDestroyFence(m_LogicalDevice, m_InFlightFences[i], nullptr); // clean up fences 
-			}
-			vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr); // destroy the command pool 			
-			vkDestroyDevice(m_LogicalDevice, nullptr); // clean logical device 
-			if (s_EnableValidationLayers)
-			{
-				DestroyDebugUtilsMessengerEXT(m_VkInstance, m_DebugCallbackMessenger, nullptr); // clean layers debugger
-			}
-			vkDestroySurfaceKHR(m_VkInstance, m_WindowSurface, nullptr);
-			// destroy the window surface (before the instance) 
-			vkDestroyInstance(m_VkInstance, nullptr); // clean active vulkan instance 
+			VKE_SAFE_DELETE(m_TextureManager); //TODO: Abstract this from here
+			VKE_SAFE_DELETE(m_ValidationLayer)
+			
+			//vkDeviceWaitIdle(m_LogicalDevice); // wait for operations in a specific command queue to be finished
+			//CleanupSwapChain();
+			//vkDestroySampler(m_LogicalDevice, m_TextureSampler, nullptr); // destroy texture sampler
+			//vkDestroyImageView(m_LogicalDevice, m_TextureImageView, nullptr); // destroy image views
+			//vkDestroyImage(m_LogicalDevice, m_TextureImage, nullptr); // destroy image 
+			//vkFreeMemory(m_LogicalDevice, m_TextureImageMemory, nullptr); // destroy image memory 
+			//vkDestroyDescriptorSetLayout(m_LogicalDevice, m_DescriptorSetLayout, nullptr);
+			//// clean up descriptor binding sets
+			//vkDestroyBuffer(m_LogicalDevice, m_IndexBuffer, nullptr); // destroy index buffer
+			//vkFreeMemory(m_LogicalDevice, m_IndexBufferMemory, nullptr); // free memory assigned to index buffer 
+			//vkDestroyBuffer(m_LogicalDevice, m_VertexBuffer, nullptr); // destroy the vertex buffer
+			//vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr); // free the memory assigned to the buffer 			
+			//for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+			//{
+			//	vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphores[i], nullptr);
+			//	// clean up render semaphore
+			//	vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphores[i], nullptr);
+			//	// clean up image semaphore 
+			//	vkDestroyFence(m_LogicalDevice, m_InFlightFences[i], nullptr); // clean up fences 
+			//}
+			//vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr); // destroy the command pool 			
+			//vkDestroyDevice(m_LogicalDevice, nullptr); // clean logical device 
+			//if (s_EnableValidationLayers)
+			//{
+			//	DestroyDebugUtilsMessengerEXT(m_VkInstance, m_DebugCallbackMessenger, nullptr); // clean layers debugger
+			//}
+			//vkDestroySurfaceKHR(m_VkInstance, m_WindowSurface, nullptr);
+			//// destroy the window surface (before the instance) 
+			//vkDestroyInstance(m_VkInstance, nullptr); // clean active vulkan instance
+			
 			glfwDestroyWindow(m_GraphicsDetails.Window); // clean glfw window 
 			glfwTerminate(); // terminate window 
 		}

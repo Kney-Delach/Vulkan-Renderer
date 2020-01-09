@@ -39,10 +39,11 @@ namespace Vulkan_Engine
 			//VkDevice GetLogicalDevice() const;
 			//VkPhysicalDevice GetPhysicalDevice() const;
 			//const uint32_t GetFamilyIndex(QueueFamilyType type) const;
-			VkQueue GetQueueHandle(QueueFamilyType type) const;
 			//const bool SupportsOptionalExtension(OptionalExtensions ext) const;
 			//VkCommandBuffer GetComputeCommandBuffer() const;
-			//Descriptor* GetPrimaryDescriptor() const;
+			VkQueue GetQueueHandle(QueueFamilyType type) const;
+			DeviceMemory* GetDeviceMemory() const;
+			Descriptor* GetGraphicsDescriptor() const;
 
 		private:
 			LogicalDevice(PhysicalDevice* physicalDevice, VkDevice device, const WindowGraphicsDetails& graphicsDetails, DeviceSurfaceCapabilities& surfaceCapabilities,
