@@ -34,6 +34,7 @@ namespace Vulkan_Engine
 			bool HasRequiredQueueFamilies();
 			bool HasRequiredExtensions(DeviceSurfaceCapabilities& surfaceCapabilities, VkSurfaceKHR& surface);
 			std::vector<VkDeviceQueueCreateInfo> GetQueueCreateInfos(const float* queuePriority);
+			VkQueue CreateQueueHandle(VkDevice logicalDevice, QueueFamilyType type);
 
 		private:
 			VkPhysicalDevice m_Device;

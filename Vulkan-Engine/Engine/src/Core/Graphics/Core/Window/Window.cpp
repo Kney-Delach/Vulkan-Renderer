@@ -79,8 +79,8 @@ namespace Vulkan_Engine
 			m_ValidationLayer = new Validation(m_GraphicsDetails.VulkanInstance, VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT, &m_WindowData);
 			VKE_CORE_ASSERT(m_ValidationLayer != nullptr, "Validation must not be nullptr!");
 			// initialize vulkan physical & logical devices
-			//DeviceSurfaceCapabilities surfaceCapabilities;
-			//CreateVulkanDevices(surfaceCapabilities, enabledLayerCount, enabledLayerNames);
+			DeviceSurfaceCapabilities surfaceCapabilities;
+			CreateVulkanDevices(surfaceCapabilities, enabledLayerCount, enabledLayerNames);
 		}
 
 		// ------------------------------------------------------------------------------------------------------
@@ -217,103 +217,6 @@ namespace Vulkan_Engine
 			}
 			throw std::runtime_error("Cannot create logic device");
 		}
-		
-		//void Window::InitVulkanPhysicalDevice() //TODO: Remove this function
-		//{
-		//	//const auto availableDevices = GetVulkanData<VkPhysicalDevice>(vkEnumeratePhysicalDevices, m_VkInstance);
-		//	//if (availableDevices.empty())
-		//	//{
-		//	//	static const std::string message =
-		//	//		"[GraphicsSystem::Window::InitVulkanPhysicalDevice]: Failed to find GPUs with Vulkan support!";
-		//	//	VK_CORE_CRITICAL(message);
-		//	//	throw std::runtime_error(message);
-		//	//}
-
-		//	//TODO: change this to give user options, or choose device with the best score
-		//	for (const auto& device : availableDevices)
-		//	{
-		//		// querying for device properties
-		//		VkPhysicalDeviceProperties properties;
-		//		vkGetPhysicalDeviceProperties(device, &properties);
-		//		VK_CORE_INFO("Device Name: {0} ~ Maximum Color Attachments: {0}", properties.deviceName,
-		//			properties.limits.maxColorAttachments);
-		//		if (IsGraphicsVulkanCompatible(device, m_WindowSurface))
-		//		{
-		//			m_PhysicalDevice = device;
-		//			m_MsaaSamples = GetMaxUsableSampleCount(); //TODO: Abstract this from here
-		//			break;
-		//		}
-		//	}
-
-		//	if (m_PhysicalDevice == nullptr)
-		//	{
-		//		static const std::string message =
-		//			"[GraphicsSystem::Window::InitVulkanPhysicalDevice]: Failed to find a suitable GPU!";
-		//		VK_CORE_CRITICAL(message);
-		//		throw std::runtime_error(message);
-		//	}
-		//}
-
-		
-		void Window::InitVulkanLogicalDevice() //TODO: Remove this function
-		{
-			//// m_LogicalDevice
-			//QueueFamilyIndices indices = FindQueueFamilies(m_PhysicalDevice, m_WindowSurface);
-
-			//// specify the queues to be created (we require multiple of these to create a queue for each family)
-			//std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-			//std::set<uint32_t> uniqueQueueFamilies = { indices.GraphicsFamily.value(), indices.PresentFamily.value() };
-			static const float queuePriority = 1.0f;
-			for (uint32_t queueFamily : uniqueQueueFamilies) // for all family queues 
-			{
-				VkDeviceQueueCreateInfo queueCreateInfo = {};
-				queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-				queueCreateInfo.queueFamilyIndex = queueFamily;
-				queueCreateInfo.queueCount = 1;
-				queueCreateInfo.pQueuePriorities = &queuePriority;
-				queueCreateInfos.push_back(queueCreateInfo);
-			}
-			//
-			//
-			//
-			//TODO: Continue implementing from here
-			//
-			//
-			// specify features of device being used
-			VkPhysicalDeviceFeatures deviceFeatures = {}; //TODO: Come back to this
-			deviceFeatures.samplerAnisotropy = VK_TRUE; // request anisotropic filtering to be enabled 
-			deviceFeatures.sampleRateShading = VK_TRUE;
-			//TODO: Toggle me -> assists in smoothing aliasing inside geometry
-
-			// create the logical device info
-			VkDeviceCreateInfo createInfo = {};
-			createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-			createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-			createInfo.pQueueCreateInfos = queueCreateInfos.data();
-			createInfo.pEnabledFeatures = &deviceFeatures;
-			// setup swap chain extensions
-			createInfo.enabledExtensionCount = s_DeviceExtensions.size();
-			createInfo.ppEnabledExtensionNames = s_DeviceExtensions.data();
-
-			if (s_EnableValidationLayers)
-			{
-				// enabled layer count and enabled layer names aren't used in new specs of vulkan (Set them for backwards compatibility)
-				createInfo.enabledLayerCount = static_cast<uint32_t>(s_ValidationLayers.size());
-				createInfo.ppEnabledLayerNames = s_ValidationLayers.data();
-			}
-
-			// create the device 
-			if (vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_LogicalDevice) != VK_SUCCESS)
-				//TODO: Make a macro to check vs_success result
-			{
-				static const std::string message =
-					"[GraphicsSystem::Window::InitVulkanLogicalDevice]: Failed to create logical device!";
-				VK_CORE_CRITICAL(message);
-				throw std::runtime_error(message);
-			}
-			vkGetDeviceQueue(m_LogicalDevice, indices.GraphicsFamily.value(), 0, &m_GraphicsQueueHandle);
-			vkGetDeviceQueue(m_LogicalDevice, indices.PresentFamily.value(), 0, &m_PresentQueueHandle);
-		}
 
 		// ------------------------------------------------------------------------------------------------------
 		// ------------------------------ Update Functions ------------------------------------------------------
@@ -373,14 +276,14 @@ namespace Vulkan_Engine
 			//CreateVulkanInstance();
 			//CreateVulkanDebugMessenger();
 			//CreateVulkanWindowSurface();
-			InitVulkanPhysicalDevice();
-			InitVulkanLogicalDevice();
+			//InitVulkanPhysicalDevice();
+			//InitVulkanLogicalDevice();
 			CreateVulkanSwapChain();
 			CreateVulkanImageViews();
 			CreateGraphicsRenderPass();
 			CreateDescriptorSetLayout(); // create descriptor set layouts 
 			CreateGraphicsPipeline();
-			CreateCommandPool();
+			//CreateCommandPool();
 			CreateColorResources();
 			CreateDepthResources();
 			CreateFramebuffers();
@@ -945,28 +848,28 @@ namespace Vulkan_Engine
 			}
 		}
 
-		void Window::CreateCommandPool()
-		{
-			// Command buffers are executed by submitting them on one of the device queues,
-			// like the graphics and presentation queues we retrieved.
-			// Each command pool can only allocate command buffers that are submitted on a single type of queue
-			QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice, m_WindowSurface);
-			VkCommandPoolCreateInfo poolInfo = {};
-			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-			poolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
-			// graphics family -> as recording commands for drawing 
-			// VK_COMMAND_POOL_CREATE_TRANSIENT_BIT				: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
-			// VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT	: Allow command buffers to be rerecorded individually, without this flag they all have to be reset together
-			poolInfo.flags = 0; // Optional
+		//void Window::CreateCommandPool()
+		//{
+		//	// Command buffers are executed by submitting them on one of the device queues,
+		//	// like the graphics and presentation queues we retrieved.
+		//	// Each command pool can only allocate command buffers that are submitted on a single type of queue
+		//	QueueFamilyIndices queueFamilyIndices = FindQueueFamilies(m_PhysicalDevice, m_WindowSurface);
+		//	VkCommandPoolCreateInfo poolInfo = {};
+		//	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+		//	poolInfo.queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value();
+		//	// graphics family -> as recording commands for drawing 
+		//	// VK_COMMAND_POOL_CREATE_TRANSIENT_BIT				: Hint that command buffers are rerecorded with new commands very often (may change memory allocation behavior)
+		//	// VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT	: Allow command buffers to be rerecorded individually, without this flag they all have to be reset together
+		//	poolInfo.flags = 0; // Optional
 
-			if (vkCreateCommandPool(m_LogicalDevice, &poolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
-			{
-				static const std::string message =
-					"[GraphicsSystem::Window::CreateCommandPool]: Failed to create Command Pool!";
-				VK_CORE_CRITICAL(message);
-				throw std::runtime_error(message);
-			}
-		}
+		//	if (vkCreateCommandPool(m_LogicalDevice, &poolInfo, nullptr, &m_CommandPool) != VK_SUCCESS)
+		//	{
+		//		static const std::string message =
+		//			"[GraphicsSystem::Window::CreateCommandPool]: Failed to create Command Pool!";
+		//		VK_CORE_CRITICAL(message);
+		//		throw std::runtime_error(message);
+		//	}
+		//}
 
 		void Window::CreateCommandBuffers()
 		{

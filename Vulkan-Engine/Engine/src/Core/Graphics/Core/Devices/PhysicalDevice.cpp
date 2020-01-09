@@ -113,8 +113,31 @@ namespace Vulkan_Engine
 		{
 			const float queuePriority = 1.0f;
 			auto createInfos = GetQueueCreateInfos(&queuePriority);
+			
+			VkPhysicalDeviceFeatures deviceFeatures = {}; //TODO: Implement a better way to do this
+			deviceFeatures.samplerAnisotropy = VK_TRUE;
+			
+			VkDeviceCreateInfo deviceCreateInfo = {};
+			deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+			deviceCreateInfo.pQueueCreateInfos = createInfos.data();
+			deviceCreateInfo.queueCreateInfoCount = createInfos.size();
+			deviceCreateInfo.pEnabledFeatures = &deviceFeatures;
+			deviceCreateInfo.enabledLayerCount = enabledLayerCount;
+			deviceCreateInfo.ppEnabledLayerNames = enabledLayerNames; //TODO: Check if to include validation layers here.
+			deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(m_Extensions.size());
+			deviceCreateInfo.ppEnabledExtensionNames = m_Extensions.data();
+			deviceCreateInfo.pNext = nullptr;
+			deviceCreateInfo.flags = 0;
 
-			//TODO FINISH IMPLEMENTING ME
+			//TODO: Implement descriptor indexing feature extension here
+			VkDevice logicalDevice;
+			VK_RESULT(vkCreateDevice(m_Device, &deviceCreateInfo, nullptr, &logicalDevice));
+			
+			m_QueueHandles[static_cast<size_t>(QueueFamilyType::GRAPHICS)] = CreateQueueHandle(logicalDevice, QueueFamilyType::GRAPHICS);
+			m_QueueHandles[static_cast<size_t>(QueueFamilyType::PRESENTATION)] = CreateQueueHandle(logicalDevice, QueueFamilyType::PRESENTATION);
+			m_QueueHandles[static_cast<size_t>(QueueFamilyType::COMPUTE)] = CreateQueueHandle(logicalDevice, QueueFamilyType::COMPUTE);
+
+			return new LogicalDevice(this, logicalDevice, graphicsDetails, surfaceCapabilities, m_QueueFamilyIndices, m_QueueHandles);
 		}
 
 		std::vector<VkDeviceQueueCreateInfo> PhysicalDevice::GetQueueCreateInfos(const float* queuePriority)
@@ -137,6 +160,16 @@ namespace Vulkan_Engine
 				queueCreateInfos.push_back(createInfo);
 			}
 			return queueCreateInfos;
+		}
+
+		VkQueue PhysicalDevice::CreateQueueHandle(VkDevice logicalDevice, QueueFamilyType type)
+		{
+			VKE_ASSERT(type != QueueFamilyType::ENUM_SIZE, "Queue family type out of bounds!");
+			VkQueue queueHandle;
+			const uint32_t familyIndex = m_QueueFamilyIndices[static_cast<size_t>(type)];
+			VKE_ASSERT(familyIndex != m_InvalidIndex, "Attempting to create a queue handle for a queue family that doesn't exist!");
+			vkGetDeviceQueue(logicalDevice, familyIndex, 0, &queueHandle);
+			return queueHandle;
 		}
 	}
 }

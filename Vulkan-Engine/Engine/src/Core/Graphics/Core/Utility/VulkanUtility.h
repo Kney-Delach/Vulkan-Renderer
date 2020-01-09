@@ -15,6 +15,8 @@
 #include "Core/Logger/Log.h"
 #include "Core/Core.h"
 
+#include "OptionalExtensions.h" //TODO: Move this from here
+
 namespace Vulkan_Engine
 {
 	namespace Graphics

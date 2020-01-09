@@ -6,6 +6,14 @@ namespace Vulkan_Engine
 {
 	namespace Graphics
 	{
+		// forward declarations: class
+		class Window;
+		class PhysicalDevice;
+		class Descriptor;
+
+		// forward declarations: structs
+		struct WindowGraphicsDetails;
+
 		enum class QueueFamilyType : size_t
 		{
 			GRAPHICS = 0,
@@ -23,17 +31,44 @@ namespace Vulkan_Engine
 		
 		class LogicalDevice
 		{
+			friend class Window;
 			friend class PhysicalDevice;
 		public:
-			LogicalDevice() = default;
-			~LogicalDevice() = default;
 			operator VkDevice() const { return m_Device; } // used to interpret this object as a logical VkDevice
-		public:
-			VkDevice GetLogicalDevice() const;
-			VkPhysicalDevice getPhysicalDevice() const;
-			VkQueue getQueueHandle(QueueFamilyType type) const;
+			//VkDevice GetLogicalDevice() const;
+			//VkPhysicalDevice GetPhysicalDevice() const;
+			//const uint32_t GetFamilyIndex(QueueFamilyType type) const;
+			//VkQueue GetQueueHandle(QueueFamilyType type) const;
+			//const bool SupportsOptionalExtension(OptionalExtensions ext) const;
+			//VkCommandBuffer GetComputeCommandBuffer() const;
+			//Descriptor* GetPrimaryDescriptor() const;
+
+		private:
+			LogicalDevice(PhysicalDevice* physicalDevice, VkDevice device, const WindowGraphicsDetails& graphicsDetails, DeviceSurfaceCapabilities& surfaceCapabilities,
+				std::vector<uint32_t> indices, std::vector<VkQueue> handles);
+			~LogicalDevice();
+		private:
+			// Each command pool can only allocate command buffers that are submitted on a single type of queue.
+			void CreateCommandPools(uint32_t queueFamilyIndex, VkCommandPoolCreateFlags flags, VkCommandPool* commandPool) const;
+			void CreateCommandBuffers(std::vector<VkCommandBuffer>& buffers, VkCommandPool pool, uint32_t count, VkCommandBufferLevel level = VK_COMMAND_BUFFER_LEVEL_PRIMARY) const;
 		private:
 			VkDevice m_Device;
+			VkCommandPool m_GraphicsCommandPool;
+			VkCommandPool m_ComputeCommandPool;
+			std::vector<VkCommandBuffer> m_GraphicsCommandBuffers;
+			std::vector<VkCommandBuffer> m_ComputeCommandBuffers;
+			
+			PhysicalDevice* m_PhysicalDevice; // Holds physical device so only this object needs to be passed around
+			std::vector<uint32_t> m_QueueFamilyIndices; // use QueueFamilyType to index these 
+			std::vector<VkQueue> m_QueueHandles;  // store handle to graphics and presentation queues
+
+			Descriptor* m_Descriptor;
 		};
 	}
 }
+
+// VkCommandBufferAllocateInfo struct:
+// - level: specifies if the allocated command buffers are primary or secondary command buffers.
+// -|- VK_COMMAND_BUFFER_LEVEL_PRIMARY   : Can be submitted to a queue for execution, but cannot be called from other command buffers.
+// -|- VK_COMMAND_BUFFER_LEVEL_SECONDARY : Cannot be submitted directly, but can be called from primary command buffers. (helpful to reuse common operations from primary command buffers.)
+
