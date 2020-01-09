@@ -1,3 +1,7 @@
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #pragma once
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -15,7 +19,7 @@ namespace Vulkan_Engine
 		struct Vertex
 		{
 			//TODO: Change the format type depending on size of types in struct
-			glm::vec3 Position; 
+			glm::vec3 Position;
 			glm::vec3 Color;
 			glm::vec2 TexCoord;
 
@@ -39,7 +43,8 @@ namespace Vulkan_Engine
 
 				// position attribute per-vertex description
 				attributeDescriptions[0].binding = 0; // which binding the per vertex data comes from (binding 0 above)
-				attributeDescriptions[0].location = 0; // location derivative of the input in the vertex shader (location = 0 in shader)
+				attributeDescriptions[0].location = 0;
+				// location derivative of the input in the vertex shader (location = 0 in shader)
 				// float: VK_FORMAT_R32_SFLOAT
 				// vec2 : VK_FORMAT_R32G32_SFLOAT
 				// vec3 : VK_FORMAT_R32G32B32_SFLOAT
@@ -49,7 +54,8 @@ namespace Vulkan_Engine
 				// uvec4  : VK_FORMAT_R32G32B32A32_UINT, a 4 - component vector of 32 - bit unsigned integers
 				// double : VK_FORMAT_R64_SFLOAT,        a double - precision(64 - bit) float
 				attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT; // byte size of attribute data 
-				attributeDescriptions[0].offset = offsetof(Vertex, Position); // number of bytes since start of per-vertex data to read from
+				attributeDescriptions[0].offset = offsetof(Vertex, Position);
+				// number of bytes since start of per-vertex data to read from
 
 				// color attribute per-vertex description
 				attributeDescriptions[1].binding = 0;
@@ -61,7 +67,7 @@ namespace Vulkan_Engine
 				attributeDescriptions[2].location = 2;
 				attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
 				attributeDescriptions[2].offset = offsetof(Vertex, TexCoord);
-				
+
 				return attributeDescriptions;
 			}
 
@@ -76,13 +82,14 @@ namespace Vulkan_Engine
 // https://en.cppreference.com/w/cpp/utility/hash
 namespace std
 {
-	template<> struct hash<Vulkan_Engine::Graphics::Vertex>
+	template <>
+	struct hash<Vulkan_Engine::Graphics::Vertex>
 	{
 		size_t operator()(Vulkan_Engine::Graphics::Vertex const& vertex) const
 		{
-			return ((hash<glm::vec3>()(vertex.Position) 
-				^ (hash<glm::vec3>()(vertex.Color) << 1)) >> 1)
-				^ (hash<glm::vec2>()(vertex.TexCoord) << 1);
+			return (hash<glm::vec3>()(vertex.Position)
+					^ hash<glm::vec3>()(vertex.Color) << 1) >> 1
+				^ hash<glm::vec2>()(vertex.TexCoord) << 1;
 		}
 	};
 }

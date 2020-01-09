@@ -1,17 +1,7 @@
-/***************************************************************************
- * Filename		: Application.cpp
- * Name			: Ori Lazar
- * Date			: 28/12/2019
- * Description	: Definition of an application wrapper for this engine.
-     .---.
-   .'_:___".
-   |__ --==|
-   [  ]  :[|
-   |__| I=[|
-   / / ____|
-  |-/.____.'
- /___\ /___\
-***************************************************************************/
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #include "vkepch.h"
 #include "Application.h"
 
@@ -22,13 +12,9 @@
 
 namespace Vulkan_Engine
 {
-	Application::Application() : m_Running(true)
-	{
-	}
+	Application::Application() : m_Running(true) { }
 
-	Application::~Application()
-	{
-	}
+	Application::~Application() { }
 
 	void Application::OnEvent(Event& e)
 	{
@@ -65,18 +51,18 @@ namespace Vulkan_Engine
 	VKE_RESULT Application::UpdateLoop()
 	{
 		VK_CORE_DEBUG("[Application]: Running main loop");
-		while(m_Running)
+		while (m_Running)
 		{
 			//calculate time difference between frames
 			const float time = Graphics::GraphicsSystem::GetTime();
 			const Timestep deltaTime = time - m_LastFrameTime;
 			m_LastFrameTime = time;
 			m_GraphicsSystem->OnUpdate(deltaTime);
-		}		
+		}
 		return VKE_RESULT::VKE_SUCCESS;
 	}
 
-	VKE_RESULT Application::Cleanup()
+	VKE_RESULT Application::Cleanup() const
 	{
 		VK_CORE_DEBUG("[Application]: Cleaning up engine data");
 		m_GraphicsSystem->Cleanup();
@@ -95,7 +81,7 @@ namespace Vulkan_Engine
 		const unsigned width = resizeEvent.GetWidth();
 		const unsigned height = resizeEvent.GetHeight();
 		VK_CORE_INFO("[OnWindowResize]: {0} , {1}", width, height);
-		
+
 		return false;
 	}
 }

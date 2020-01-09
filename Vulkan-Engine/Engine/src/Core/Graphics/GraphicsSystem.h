@@ -1,10 +1,10 @@
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #pragma once
 #include "Core/Core.h"
 #include "Core/Events/Event.h"
-
-#define GLFW_INCLUDE_VULKAN // includes the vulkan header 
-#include "GLFW/glfw3.h"
-
 
 namespace Vulkan_Engine
 {
@@ -20,15 +20,22 @@ namespace Vulkan_Engine
 		{
 		public:
 			GraphicsSystem();
+
 			~GraphicsSystem();
+
 		public:
-			void OnUpdate(const Timestep deltaTime);
-			void Cleanup();
+			void OnUpdate(Timestep deltaTime) const;
+
+			void Cleanup() const;
+
 			void SetWindowEventCallback(const EventCallbackFunction& callback) const;
+
 		public:
-			_NODISCARD static float GetTime() { return static_cast<float>(glfwGetTime()); };
+			static float GetTime();
+
 		private:
 			void Init();
+
 		private:
 			Ref<Window> m_Window;
 		};

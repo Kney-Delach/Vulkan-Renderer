@@ -1,21 +1,9 @@
-/***************************************************************************
- * Filename		: Log.cpp
- * Name			: Ori Lazar
- * Date			: 28/12/2019
- * Description	: Contains a wrapper class implementation for spdlog logging functionality.
-     .---.
-   .'_:___".
-   |__ --==|
-   [  ]  :[|
-   |__| I=[|
-   / / ____|
-  |-/.____.'
- /___\ /___\
-***************************************************************************/
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #include "vkepch.h"
 #include "Log.h"
-
-#include <spdlog/sinks/stdout_sinks.h>
 
 namespace Vulkan_Engine
 {

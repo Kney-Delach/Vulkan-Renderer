@@ -1,20 +1,9 @@
-/***************************************************************************
- * Filename		: UniformBuffer.h
- * Name			: Ori Lazar
- * Date			: 04/01/2020
- * Description	: Handles uniform buffers.
-     .---.
-   .'_:___".
-   |__ --==|
-   [  ]  :[|
-   |__| I=[|
-   / / ____|
-  |-/.____.'
- /___\ /___\
-***************************************************************************/
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #pragma once
 
-#include <vulkan/vulkan.h>
 #include "glm/mat4x2.hpp"
 
 namespace Vulkan_Engine
@@ -28,6 +17,7 @@ namespace Vulkan_Engine
 			alignas(16) glm::mat4 Projection;
 		public:
 			MVP() = default;
+
 			~MVP() = default;
 		};
 	}

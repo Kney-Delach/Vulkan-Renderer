@@ -1,23 +1,10 @@
-/***************************************************************************
- * Filename		: EntryPoint.h
- * Name			: Ori Lazar
- * Date			: 28/12/2019
- * Description	: Entry point for this engine.
-     .---.
-   .'_:___".
-   |__ --==|
-   [  ]  :[|
-   |__| I=[|
-   / / ____|
-  |-/.____.'
- /___\ /___\
-***************************************************************************/
-#pragma once 
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
+#pragma once
 
 namespace Vulkan_Engine
 {
-	namespace Renderer
-	{
-
-	}
+	namespace Renderer { }
 }

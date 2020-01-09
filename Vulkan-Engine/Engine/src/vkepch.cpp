@@ -1,15 +1,5 @@
-/***************************************************************************
- * Filename		: vkepch.cpp
- * Name			: Ori Lazar
- * Date			: 28/12/2019
- * Description	: Precompiled header for this engine.
-     .---.
-   .'_:___".
-   |__ --==|
-   [  ]  :[|
-   |__| I=[|
-   / / ____|
-  |-/.____.'
- /___\ /___\
-***************************************************************************/
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #include "vkepch.h"

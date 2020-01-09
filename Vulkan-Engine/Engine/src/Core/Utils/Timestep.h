@@ -1,17 +1,7 @@
-/***************************************************************************
- * Filename		: Timestep.h
- * Name			: Ori Lazar
- * Date			: 28/12/2019
- * Description	: Used for frame time differencing .
-     .---.
-   .'_:___".
-   |__ --==|
-   [  ]  :[|
-   |__| I=[|
-   / / ____|
-  |-/.____.'
- /___\ /___\
-***************************************************************************/
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #pragma once
 
 namespace Vulkan_Engine
@@ -20,11 +10,16 @@ namespace Vulkan_Engine
 	{
 	public:
 		Timestep(float time = 0.0f) : m_Time(time) {}
+
 		~Timestep() = default;
-		inline operator float() const { return m_Time; }
-		inline float GetSeconds() const { return m_Time; }
-		inline float GetMilliseconds() const { return m_Time * 1000.f; }
+
+		operator float() const { return m_Time; }
+
+		float GetSeconds() const { return m_Time; }
+
+		float GetMilliseconds() const { return m_Time * 1000.f; }
+
 	private:
-		float m_Time; 
-	};	
+		float m_Time;
+	};
 }

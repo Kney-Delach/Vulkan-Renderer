@@ -1,23 +1,12 @@
-/***************************************************************************
- * Filename		: Log.h
- * Name			: Ori Lazar
- * Date			: 28/12/2019
- * Description	: Contains a wrapper class declaration for spdlog logging functionality.
-     .---.
-   .'_:___".
-   |__ --==|
-   [  ]  :[|
-   |__| I=[|
-   / / ____|
-  |-/.____.'
- /___\ /___\
-***************************************************************************/
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #pragma once
 
 #include "Core/Core.h"
 
 #include <spdlog/spdlog.h>
-#include <spdlog/fmt/ostr.h>
 
 namespace Vulkan_Engine
 {
@@ -25,8 +14,11 @@ namespace Vulkan_Engine
 	{
 	public:
 		static void Init();
-		inline static std::shared_ptr<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
-		inline static std::shared_ptr<spdlog::logger>& GetClientLogger() { return s_AppLogger; }
+
+		static std::shared_ptr<spdlog::logger>& GetCoreLogger() { return s_CoreLogger; }
+
+		static std::shared_ptr<spdlog::logger>& GetClientLogger() { return s_AppLogger; }
+
 	private:
 		static Ref<spdlog::logger> s_CoreLogger;
 		static Ref<spdlog::logger> s_AppLogger;

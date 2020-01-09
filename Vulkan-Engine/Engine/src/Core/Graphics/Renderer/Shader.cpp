@@ -1,17 +1,7 @@
-/***************************************************************************
- * Filename		: Shader.cpp
- * Name			: Ori Lazar
- * Date			: 30/12/2019
- * Description	: Handles shaders in this engine
-     .---.
-   .'_:___".
-   |__ --==|
-   [  ]  :[|
-   |__| I=[|
-   / / ____|
-  |-/.____.'
- /___\ /___\
-***************************************************************************/
+// Copyright (c) 2020 [Ori Lazar]
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE', which is part of this source code package.
+
 #include "vkepch.h"
 
 #include "Shader.h"
@@ -27,13 +17,13 @@ namespace Vulkan_Engine
 		{
 			// move away from constructor 
 			std::ifstream file(filename, std::ios::ate | std::ios::binary);
-			if (!file.is_open()) 
+			if (!file.is_open())
 			{
 				static const std::string message = "[GraphicsSystem::Shader::Constructor]: Failed to open shader file!";
 				VK_CORE_CRITICAL("{0} -> In file:  {1} ", message, filename);
 				throw std::runtime_error(message);
 			}
-			const size_t fileSize = (size_t)file.tellg();
+			const size_t fileSize = static_cast<size_t>(file.tellg());
 			m_ShaderData = std::vector<char>(fileSize);
 			file.seekg(0);
 			file.read(m_ShaderData.data(), fileSize);
@@ -46,7 +36,7 @@ namespace Vulkan_Engine
 		Shader::~Shader()
 		{
 			vkDestroyShaderModule(*m_LogicalDevice, m_ShaderModule, nullptr);
-		}	
+		}
 
 		void Shader::CreateShaderModule()
 		{
@@ -54,10 +44,12 @@ namespace Vulkan_Engine
 			createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 			createInfo.codeSize = m_ShaderData.size();
 			// note, ensure that data matches alignment 
-			createInfo.pCode = reinterpret_cast<const uint32_t*>(m_ShaderData.data()); // reinterpret due to bytecode usage vs char usage
-			if (vkCreateShaderModule(*m_LogicalDevice, &createInfo, nullptr, &m_ShaderModule) != VK_SUCCESS) 
+			createInfo.pCode = reinterpret_cast<const uint32_t*>(m_ShaderData.data());
+			// reinterpret due to bytecode usage vs char usage
+			if (vkCreateShaderModule(*m_LogicalDevice, &createInfo, nullptr, &m_ShaderModule) != VK_SUCCESS)
 			{
-				static const std::string message = "[GraphicsSystem::Shader::Constructor]: Failed to create shader module!";
+				static const std::string message =
+					"[GraphicsSystem::Shader::Constructor]: Failed to create shader module!";
 				VK_CORE_CRITICAL(message);
 				throw std::runtime_error(message);
 			}

@@ -2,10 +2,16 @@
 // This file is subject to the terms and conditions defined in
 // file 'LICENSE', which is part of this source code package.
 
-#include "vkepch.h"
-#include "Vertex.h"
+#pragma once
 
 namespace Vulkan_Engine
 {
-	namespace Graphics { }
+	namespace Graphics
+	{
+		enum class OptionalExtensions
+		{
+			kDescriptorIndexing,
+			kDebugUtilities
+		};
+	}
 }
